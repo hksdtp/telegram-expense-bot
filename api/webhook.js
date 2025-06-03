@@ -144,35 +144,21 @@ async function saveToSheet(userId, username, expenseData) {
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
 bot.start((ctx) => {
-  ctx.reply(`Hello ${ctx.from.first_name}!
-Nhập chi thu đi.`);
+  ctx.reply(`Hello ${ctx.from.first_name}!\nNhập chi thu đi.`);
 });
 
 bot.help((ctx) => {
-  ctx.reply(`📖 Hướng dẫn:
-
-🔹 Nhập chi tiêu:
-"Xăng xe 500k tk"
-"Phở bò 55k tm"
-
-💳 Thanh toán:
-• tk = Chuyển khoản
-• tm = Tiền mặt`);
+  ctx.reply(`📖 Hướng dẫn:\n\n🔹 Nhập chi tiêu:\n"Xăng xe 500k tk"\n"Phở bò 55k tm"\n\n💳 Thanh toán:\n• tk = Chuyển khoản\n• tm = Tiền mặt`);
 });
 
 bot.command('categories', (ctx) => {
-  let message = '📋 Danh mục chi tiêu:
+  let message = `📋 Danh mục chi tiêu:
 
-';
-  message += '🚗 Chi phí xe ô tô: Xăng, Rửa xe, VETC
-';
-  message += '🍽️ Nhà hàng: Ăn sáng, Ăn trưa, Ăn tối, Café
-';
-  message += '📦 Giao nhận đồ: Ship đồ, Grab food
-';
-  message += '🛒 Mua đồ/Dịch vụ: Mua sắm, Spa, Cắt tóc
-';
-  message += '💰 Chi phí khác: Linh tinh';
+🚗 Chi phí xe ô tô: Xăng, Rửa xe, VETC
+🍽️ Nhà hàng: Ăn sáng, Ăn trưa, Ăn tối, Café
+📦 Giao nhận đồ: Ship đồ, Grab food
+🛒 Mua đồ/Dịch vụ: Mua sắm, Spa, Cắt tóc
+💰 Chi phí khác: Linh tinh`;
   ctx.reply(message);
 });
 
@@ -186,12 +172,7 @@ bot.on('text', async (ctx) => {
     return ctx.reply('❌ Không nhận diện được số tiền.\n\n💡 Ví dụ: "Xăng xe 500k tk"');
   }
 
-  const confirmMsg = `✅ Tôi đã nhận thông tin:
-
-${expense.emoji} ${expense.category} 
-💰 ${expense.amount.toLocaleString('vi-VN')} ₫
-💳 ${expense.paymentMethod}
-\n⏳ Đang lưu...`;
+  const confirmMsg = `✅ Tôi đã nhận thông tin:\n\n${expense.emoji} ${expense.category} \n💰 ${expense.amount.toLocaleString('vi-VN')} ₫\n💳 ${expense.paymentMethod}\n\n⏳ Đang lưu...`;
 
   const loadingMsg = await ctx.reply(confirmMsg);
 
