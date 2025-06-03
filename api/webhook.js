@@ -1,1 +1,225 @@
-// Expense categories theo yêu cầu mới const categories = { // Chi phí xe ô tô 'chi phí xe ô tô': { emoji: '🚗', subcategories: ['xăng', 'rửa xe', 'vetc', 'thu phí không dừng', 'sửa chữa', 'vé đỗ xe', 'cầu đường', 'phí đường', 'khác xe'] }, 'xăng': { emoji: '⛽', subcategories: ['xăng', 'nhiên liệu'] }, 'rửa xe': { emoji: '🧽', subcategories: ['rửa xe', 'vệ sinh xe'] }, 'vetc': { emoji: '🎫', subcategories: ['vetc', 'thu phí không dừng', 'phí đường'] }, 'sửa chữa xe': { emoji: '🔧', subcategories: ['sửa chữa', 'bảo dưỡng', 'thay đồ'] }, 'đỗ xe': { emoji: '🅿️', subcategories: ['vé đỗ xe', 'cầu đường', 'phí đỗ xe'] }, // Nhà hàng (ăn uống) 'nhà hàng': { emoji: '🍽️', subcategories: ['ăn sáng', 'ăn trưa', 'ăn tối', 'ăn vặt', 'café', 'trà sữa', 'nước uống', 'buffet', 'cơm', 'phở', 'bún', 'mì'] }, 'ăn uống': { emoji: '🍴', subcategories: ['ăn sáng', 'ăn trưa', 'ăn tối', 'ăn vặt'] }, 'café': { emoji: '☕', subcategories: ['cà phê', 'trà', 'nước ép', 'sinh tố'] }, 'ăn sáng': { emoji: '🍳', subcategories: ['phở', 'bánh mì', 'cơm', 'xôi'] }, 'ăn trưa': { emoji: '🍱', subcategories: ['cơm', 'bún', 'phở', 'mì'] }, 'ăn tối': { emoji: '🍽️', subcategories: ['cơm', 'lẩu', 'nướng', 'pizza'] }, // Giao nhận đồ 'giao nhận đồ': { emoji: '📦', subcategories: ['giao đồ', 'nhận đồ', 'shipper', 'grab food', 'now', 'baemin', 'shopee food', 'gojek', 'phí ship'] }, 'giao đồ': { emoji: '🚚', subcategories: ['giao đồ', 'delivery', 'shipper'] }, 'ship đồ': { emoji: '📮', subcategories: ['phí ship', 'giao hàng', 'vận chuyển'] }, // Mua đồ/dịch vụ 'mua đồ': { emoji: '🛒', subcategories: ['quần áo', 'giày dép', 'mỹ phẩm', 'đồ gia dụng', 'điện tử', 'sách', 'đồ chơi', 'phụ kiện'] }, 'dịch vụ': { emoji: '🔧', subcategories: ['cắt tóc', 'massage', 'nail', 'spa', 'gym', 'học phí', 'khóa học', 'sửa chữa', 'bảo hiểm'] }, 'mua sắm': { emoji: '🛍️', subcategories: ['quần áo', 'giày dép', 'mỹ phẩm', 'đồ dùng'] }, 'shopping': { emoji: '🛒', subcategories: ['mua đồ', 'shopping'] }, // Chi phí khác 'chi phí khác': { emoji: '💰', subcategories: ['khác', 'linh tinh', 'phí bank', 'thuế', 'phạt', 'từ thiện', 'quà tặng', 'y tế', 'thuốc'] }, 'khác': { emoji: '📝', subcategories: ['khác', 'linh tinh', 'chưa phân loại'] } }; // Payment methods mapping - chỉ 2 loại const paymentMethods = { 'tk': 'Chuyển khoản', 'chuyển khoản': 'Chuyển khoản', 'banking': 'Chuyển khoản', 'bank': 'Chuyển khoản', 'tm': 'Tiền mặt', 'tiền mặt': 'Tiền mặt', 'cash': 'Tiền mặt' }; // Enhanced parsing function cho categories mới function parseExpense(text) { const input = text.toLowerCase().trim(); // Extract amount const amountRegex = /(\d{1,3}(?:[,.]?\d{3})*)[k|đ|vnd|d|ng|nghìn|triệu]?/i; const amountMatch = input.match(amountRegex); let amount = 0; let category = 'Chi phí khác'; let emoji = '💰'; let subcategory = 'Khác'; let paymentMethod = 'Tiền mặt'; let quantity = 1; let type = 'Chi'; if (amountMatch) { let amountStr = amountMatch[1].replace(/[,\.]/g, ''); amount = parseInt(amountStr); if (input.includes('k') || input.includes('nghìn')) { if (amount < 1000) amount *= 1000; } else if (input.includes('triệu')) { amount *= 1000000; } } // Find main category and subcategory với priority matching let bestMatch = ''; let matchLength = 0; // Specific keyword matching với độ ưu tiên const categoryKeywords = { // Chi phí xe ô tô keywords 'chi phí xe ô tô': ['xăng', 'rửa xe', 'vetc', 'sửa xe', 'đỗ xe', 'phí đường', 'cầu đường'], 'xăng': ['xăng', 'nhiên liệu', 'petrol'], 'rửa xe': ['rửa xe', 'vệ sinh xe'], 'vetc': ['vetc', 'thu phí', 'phí đường', 'cao tốc'], 'sửa chữa xe': ['sửa xe', 'bảo dưỡng', 'thay đồ', 'sửa chữa'], 'đỗ xe': ['đỗ xe', 'vé đỗ', 'phí đỗ', 'cầu đường'], // Nhà hàng keywords 'nhà hàng': ['ăn sáng', 'ăn trưa', 'ăn tối', 'ăn uống', 'café', 'cà phê', 'phở', 'cơm', 'bún', 'mì', 'nhà hàng', 'quán ăn'], 'ăn sáng': ['ăn sáng', 'sáng', 'phở', 'bánh mì', 'xôi'], 'ăn trưa': ['ăn trưa', 'trưa', 'cơm trưa'], 'ăn tối': ['ăn tối', 'tối', 'cơm tối'], 'café': ['café', 'cà phê', 'coffee', 'trà', 'nước'], // Giao nhận đồ keywords 'giao nhận đồ': ['giao đồ', 'nhận đồ', 'ship', 'shipper', 'grab food', 'now', 'baemin', 'delivery'], 'giao đồ': ['giao đồ', 'delivery', 'ship đồ'], 'ship đồ': ['ship', 'phí ship', 'giao hàng'], // Mua đồ/dịch vụ keywords 'mua đồ': ['mua đồ', 'mua sắm', 'shopping', 'quần áo', 'giày', 'mỹ phẩm', 'đồ gia dụng'], 'dịch vụ': ['dịch vụ', 'cắt tóc', 'massage', 'spa', 'gym', 'học phí'], 'mua sắm': ['mua sắm', 'shopping', 'mua đồ'], // Chi phí khác keywords 'chi phí khác': ['khác', 'linh tinh', 'phí bank', 'thuế', 'phạt', 'từ thiện'] }; // Tìm category match tốt nhất for (let [catName, keywords] of Object.entries(categoryKeywords)) { for (let keyword of keywords) { if (input.includes(keyword) && keyword.length > matchLength) { bestMatch = catName; matchLength = keyword.length; subcategory = keyword.charAt(0).toUpperCase() + keyword.slice(1); } } } if (bestMatch && categories[bestMatch]) { category = bestMatch.charAt(0).toUpperCase() + bestMatch.slice(1); emoji = categories[bestMatch].emoji; } // Find payment method for (let method in paymentMethods) { if (input.includes(method)) { paymentMethod = paymentMethods[method]; break; } } // Extract quantity if mentioned const quantityRegex = /(\d+)\s*(cái|ly|tô|phần|suất|lần|lít)/i; const quantityMatch = input.match(quantityRegex); if (quantityMatch) { quantity = parseInt(quantityMatch[1]); } // Detect if it's income if (input.includes('thu') || input.includes('nhận') || input.includes('lương') || input.includes('thưởng')) { type = 'Thu'; category = 'Thu nhập'; emoji = '💵'; } return { amount, category, emoji, subcategory: subcategory || category, paymentMethod, quantity, type, description: text.trim() }; } // Enhanced save to sheet function async function saveToSheet(userId, username, expenseData) { try { await doc.loadInfo(); const sheet = doc.sheetsByIndex[0]; const now = new Date(); const dateStr = now.toLocaleDateString('vi-VN'); const timeStr = now.toLocaleTimeString('vi-VN'); await sheet.addRow({ 'Ngày': dateStr, 'Danh mục': expenseData.category, 'Mô tả': expenseData.description, 'Số tiền': expenseData.amount, 'Loại': expenseData.type, 'Link hóa đơn': '', // Will be updated when user sends photo 'Thời gian': timeStr, 'Danh mục phụ': expenseData.subcategory, 'Số lượng': expenseData.quantity, 'Phương thức thanh toán': expenseData.paymentMethod, 'Ghi chú': `${username} (${userId})` }); return true; } catch (error) { console.error('Error saving to sheet:', error); return false; } } // Enhanced response message bot.on('text', async (ctx) => { const text = ctx.message.text; if (text.startsWith('/')) return; const expense = parseExpense(text); if (expense.amount <= 0) { return ctx.reply('❌ Không thể nhận diện số tiền.\n\n💡 Ví dụ: "Ăn sáng 100k tk" hoặc "Café 45k tm"'); } // Enhanced confirmation message const confirmMsg = `✅ *Đã phân tích chi tiêu:* ${expense.emoji} *Danh mục:* ${expense.category} 🏷️ *Danh mục phụ:* ${expense.subcategory} 💰 *Số tiền:* ${expense.amount.toLocaleString('vi-VN')}₫ 📊 *Loại:* ${expense.type} 🔢 *Số lượng:* ${expense.quantity} 💳 *Thanh toán:* ${expense.paymentMethod} 📝 *Mô tả:* ${expense.description} ⏳ Đang lưu vào Google Sheet...`; const loadingMsg = await ctx.replyWithMarkdown(confirmMsg); const saved = await saveToSheet( ctx.from.id, ctx.from.username || ctx.from.first_name, expense ); if (saved) { await ctx.telegram.editMessageText( ctx.chat.id, loadingMsg.message_id, null, confirmMsg.replace('⏳ Đang lưu vào Google Sheet...', '✅ *Đã lưu thành công!*'), { parse_mode: 'Markdown' } ); } else { await ctx.telegram.editMessageText( ctx.chat.id, loadingMsg.message_id, null, '❌ Có lỗi khi lưu. Vui lòng thử lại sau.' ); } });
+const { Telegraf } = require('telegraf');
+const { GoogleSpreadsheet } = require('google-spreadsheet');
+const { JWT } = require('google-auth-library');
+
+const serviceAccountAuth = new JWT({
+  email: process.env.GOOGLE_CLIENT_EMAIL,
+  key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+});
+
+const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID, serviceAccountAuth);
+
+const categories = {
+  'chi phí xe ô tô': { emoji: '🚗', subcategories: ['xăng', 'rửa xe', 'vetc', 'sửa chữa', 'vé đỗ xe'] },
+  'xăng': { emoji: '⛽', subcategories: ['xăng', 'nhiên liệu'] },
+  'rửa xe': { emoji: '🧽', subcategories: ['rửa xe', 'vệ sinh xe'] },
+  'vetc': { emoji: '🎫', subcategories: ['vetc', 'thu phí không dừng'] },
+  'nhà hàng': { emoji: '🍽️', subcategories: ['ăn sáng', 'ăn trưa', 'ăn tối', 'café'] },
+  'ăn sáng': { emoji: '🍳', subcategories: ['phở', 'bánh mì', 'cơm'] },
+  'ăn trưa': { emoji: '🍱', subcategories: ['cơm', 'bún', 'phở'] },
+  'ăn tối': { emoji: '🍽️', subcategories: ['cơm', 'lẩu', 'nướng'] },
+  'café': { emoji: '☕', subcategories: ['cà phê', 'trà', 'nước'] },
+  'giao nhận đồ': { emoji: '📦', subcategories: ['giao đồ', 'ship đồ', 'grab food'] },
+  'ship đồ': { emoji: '📮', subcategories: ['phí ship', 'giao hàng'] },
+  'mua đồ': { emoji: '🛒', subcategories: ['quần áo', 'giày dép', 'mỹ phẩm'] },
+  'dịch vụ': { emoji: '🔧', subcategories: ['cắt tóc', 'massage', 'spa'] },
+  'chi phí khác': { emoji: '💰', subcategories: ['khác', 'linh tinh'] }
+};
+
+const paymentMethods = {
+  'tk': 'Chuyển khoản',
+  'chuyển khoản': 'Chuyển khoản',
+  'banking': 'Chuyển khoản',
+  'tm': 'Tiền mặt',
+  'tiền mặt': 'Tiền mặt',
+  'cash': 'Tiền mặt'
+};
+
+function parseExpense(text) {
+  const input = text.toLowerCase().trim();
+  const amountRegex = /(\d{1,3}(?:[,.]?\d{3})*)[k|đ|vnd|d|ng|nghìn|triệu]?/i;
+  const amountMatch = input.match(amountRegex);
+  
+  let amount = 0;
+  let category = 'Chi phí khác';
+  let emoji = '💰';
+  let subcategory = 'Khác';
+  let paymentMethod = 'Tiền mặt';
+  let quantity = 1;
+  let type = 'Chi';
+  
+  if (amountMatch) {
+    let amountStr = amountMatch[1].replace(/[,\.]/g, '');
+    amount = parseInt(amountStr);
+    
+    if (input.includes('k') || input.includes('nghìn')) {
+      if (amount < 1000) amount *= 1000;
+    } else if (input.includes('triệu')) {
+      amount *= 1000000;
+    }
+  }
+  
+  let bestMatch = '';
+  let matchLength = 0;
+  
+  for (let cat in categories) {
+    if (input.includes(cat) && cat.length > matchLength) {
+      bestMatch = cat;
+      matchLength = cat.length;
+    }
+  }
+  
+  if (bestMatch) {
+    category = bestMatch.charAt(0).toUpperCase() + bestMatch.slice(1);
+    emoji = categories[bestMatch].emoji;
+    
+    for (let sub of categories[bestMatch].subcategories) {
+      if (input.includes(sub)) {
+        subcategory = sub.charAt(0).toUpperCase() + sub.slice(1);
+        break;
+      }
+    }
+  }
+  
+  for (let method in paymentMethods) {
+    if (input.includes(method)) {
+      paymentMethod = paymentMethods[method];
+      break;
+    }
+  }
+  
+  const quantityRegex = /(\d+)\s*(cái|ly|tô|phần|suất|lần|lít)/i;
+  const quantityMatch = input.match(quantityRegex);
+  if (quantityMatch) {
+    quantity = parseInt(quantityMatch[1]);
+  }
+  
+  if (input.includes('thu') || input.includes('nhận') || input.includes('lương')) {
+    type = 'Thu';
+    category = 'Thu nhập';
+    emoji = '💵';
+  }
+  
+  return {
+    amount,
+    category,
+    emoji,
+    subcategory: subcategory || category,
+    paymentMethod,
+    quantity,
+    type,
+    description: text.trim()
+  };
+}
+
+async function saveToSheet(userId, username, expenseData) {
+  try {
+    await doc.loadInfo();
+    const sheet = doc.sheetsByIndex[0];
+    
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('vi-VN');
+    const timeStr = now.toLocaleTimeString('vi-VN');
+    
+    await sheet.addRow({
+      'Ngày': dateStr,
+      'Danh mục': expenseData.category,
+      'Mô tả': expenseData.description,
+      'Số tiền': expenseData.amount,
+      'Loại': expenseData.type,
+      'Link hóa đơn': '',
+      'Thời gian': timeStr,
+      'Danh mục phụ': expenseData.subcategory,
+      'Số lượng': expenseData.quantity,
+      'Phương thức thanh toán': expenseData.paymentMethod,
+      'Ghi chú': `${username} (${userId})`
+    });
+    
+    return true;
+  } catch (error) {
+    console.error('Error saving to sheet:', error);
+    return false;
+  }
+}
+
+const bot = new Telegraf(process.env.BOT_TOKEN);
+
+bot.start((ctx) => {
+  ctx.reply(`🤖 Chào mừng ${ctx.from.first_name}!\n\n📝 Nhập chi tiêu theo format:\n"Xăng xe 500k tk"\n"Phở bò 55k tm"\n\n💳 Thanh toán: tk = Chuyển khoản, tm = Tiền mặt`);
+});
+
+bot.help((ctx) => {
+  ctx.reply(`📖 Hướng dẫn:\n\n🔹 Nhập chi tiêu:\n"Xăng xe 500k tk"\n"Phở bò 55k tm"\n\n💳 Thanh toán:\n• tk = Chuyển khoản\n• tm = Tiền mặt\n\n🔹 Lệnh:\n/categories - Danh mục`);
+});
+
+bot.command('categories', (ctx) => {
+  let message = '📋 Danh mục chi tiêu:\n\n';
+  message += '🚗 Chi phí xe ô tô: Xăng, Rửa xe, VETC\n';
+  message += '🍽️ Nhà hàng: Ăn sáng, Ăn trưa, Ăn tối, Café\n';
+  message += '📦 Giao nhận đồ: Ship đồ, Grab food\n';
+  message += '🛒 Mua đồ/Dịch vụ: Mua sắm, Spa, Cắt tóc\n';
+  message += '💰 Chi phí khác: Linh tinh\n\n';
+  message += '💡 Ví dụ: "Xăng xe 500k tk"';
+  ctx.reply(message);
+});
+
+bot.on('text', async (ctx) => {
+  const text = ctx.message.text;
+  if (text.startsWith('/')) return;
+  
+  const expense = parseExpense(text);
+  
+  if (expense.amount <= 0) {
+    return ctx.reply('❌ Không nhận diện được số tiền.\n\n💡 Ví dụ: "Xăng xe 500k tk"');
+  }
+  
+  const confirmMsg = `✅ Đã phân tích:\n\n${expense.emoji} ${expense.category}\n💰 ${expense.amount.toLocaleString('vi-VN')}₫\n💳 ${expense.paymentMethod}\n\n⏳ Đang lưu...`;
+  
+  const loadingMsg = await ctx.reply(confirmMsg);
+  
+  const saved = await saveToSheet(
+    ctx.from.id,
+    ctx.from.username || ctx.from.first_name,
+    expense
+  );
+  
+  if (saved) {
+    await ctx.telegram.editMessageText(
+      ctx.chat.id,
+      loadingMsg.message_id,
+      null,
+      confirmMsg.replace('⏳ Đang lưu...', '✅ Đã lưu thành công!')
+    );
+  } else {
+    await ctx.telegram.editMessageText(
+      ctx.chat.id,
+      loadingMsg.message_id,
+      null,
+      '❌ Có lỗi khi lưu. Vui lòng thử lại.'
+    );
+  }
+});
+
+bot.catch((err, ctx) => {
+  console.error('Bot error:', err);
+  ctx.reply('❌ Có lỗi xảy ra. Vui lòng thử lại.');
+});
+
+export default async function handler(req, res) {
+  try {
+    if (req.method !== 'POST') {
+      return res.status(405).json({ 
+        error: 'Method not allowed',
+        message: 'Webhook endpoint is working! Use POST method.',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    await bot.handleUpdate(req.body);
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    console.error('Webhook error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
