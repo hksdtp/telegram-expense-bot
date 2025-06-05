@@ -531,7 +531,7 @@ bot.start((ctx) => {
 
 // Xử lý lệnh /help
 bot.help((ctx) => {
-  ctx.reply(`📖 HƯỚNG DẪN SỬ DỤNG:\n\n1. Format cơ bản:\n"Ăn sáng 50k tm"\n"Xăng xe 500k tk"\n\n2. Format có dấu gạch ngang:\n"Mô tả - Số tiền - Phương thức"\n"Thanh toán sân pickleball - 2tr - tk"\n\n3. Format với số lượng:\n"Đổ xăng - 1tr - 70L - tk"\n"Mua nước - 50k - 5 chai - tm"\n\n4. Thu nhập/Hoàn tiền:\n"Lương tháng 15 triệu tk"\n"Hoàn 200k tm"\n\n5. Hỗ trợ ngày tháng:\n"Ăn trưa tháng 6 - 50k - tm"\n"Mua đồ ngày 15 - 200k - tk"\n"Cafe 10/6 - 30k - tm"\n\n6. Gửi ảnh hóa đơn kèm chú thích\n\n💳 Phương thức thanh toán:\n• tk/ck = Chuyển khoản\n• tm = Tiền mặt\n\n💰 Đơn vị tiền tệ:\n• k = nghìn (100k = 100,000)\n• tr = triệu (2tr = 2,000,000)\n\n📊 Đơn vị số lượng:\n• L, lít, kg, g, cái, chiếc, ly, chai, hộp, gói, túi, m, cm, km\n\n⏰ Nhắc nhở tự động:\n• 12:00 trưa\n• 18:00 tối\n• 22:00 tối\n\n📋 Lệnh khác:\n/reminder_on - Bật nhắc nhở\n/reminder_off - Tắt nhắc nhở\n/categories - Xem danh mục\n/channel_test - Test kết nối Channel\n/group_test - Test kết nối Group`);
+  ctx.reply(`📖 HƯỚNG DẪN SỬ DỤNG:\n\n1. Format cơ bản:\n"Ăn sáng 50k tm"\n"Xăng xe 500k tk"\n\n2. Format có dấu gạch ngang:\n"Mô tả - Số tiền - Phương thức"\n"Thanh toán sân pickleball - 2tr - tk"\n\n3. Format với số lượng:\n"Đổ xăng - 1tr - 70L - tk"\n"Mua nước - 50k - 5 chai - tm"\n\n4. Thu nhập/Hoàn tiền:\n"Lương tháng 15 triệu tk"\n"Hoàn 200k tm"\n\n5. Hỗ trợ ngày tháng:\n"Ăn trưa tháng 6 - 50k - tm"\n"Mua đồ ngày 15 - 200k - tk"\n"Cafe 10/6 - 30k - tm"\n\n6. Gửi ảnh hóa đơn kèm chú thích\n\n💳 Phương thức thanh toán:\n• tk/ck = Chuyển khoản\n• tm = Tiền mặt\n\n💰 Đơn vị tiền tệ:\n• k = nghìn (100k = 100,000)\n• tr = triệu (2tr = 2,000,000)\n\n📊 Đơn vị số lượng:\n• L, lít, kg, g, cái, chiếc, ly, chai, hộp, gói, túi, m, cm, km\n\n⏰ Nhắc nhở tự động:\n• 12:00 trưa\n• 18:00 tối\n• 22:00 tối\n\n📋 Lệnh khác:\n/reminder_on - Bật nhắc nhở\n/reminder_off - Tắt nhắc nhở\n/categories - Xem danh mục\n/getid - Lấy Chat ID\n/channel_test - Test kết nối Channel\n/group_test - Test kết nối Group`);
 });
 
 // Xử lý lệnh /categories
@@ -591,6 +591,40 @@ bot.command('group_test', async (ctx) => {
     console.error('Lỗi test Group:', error);
     ctx.reply(`❌ Lỗi khi gửi lên Group: ${error.message}`);
   }
+});
+
+// Lệnh lấy Chat ID
+bot.command('getid', async (ctx) => {
+  const chatId = ctx.chat.id;
+  const chatType = ctx.chat.type;
+  const chatTitle = ctx.chat.title || ctx.chat.first_name || 'Unknown';
+
+  let message = `🆔 **THÔNG TIN CHAT**\n\n`;
+  message += `📋 **Chat ID:** \`${chatId}\`\n`;
+  message += `📝 **Loại:** ${chatType}\n`;
+  message += `🏷️ **Tên:** ${chatTitle}\n\n`;
+
+  if (chatType === 'group' || chatType === 'supergroup') {
+    message += `💡 **Hướng dẫn:**\n`;
+    message += `1. Copy Chat ID: \`${chatId}\`\n`;
+    message += `2. Thêm vào Vercel Environment Variables:\n`;
+    message += `   • Name: \`GROUP_ID\`\n`;
+    message += `   • Value: \`${chatId}\`\n`;
+    message += `3. Deploy lại project\n`;
+    message += `4. Gửi \`/group_test\` để kiểm tra`;
+  } else if (chatType === 'channel') {
+    message += `💡 **Hướng dẫn:**\n`;
+    message += `1. Copy Chat ID: \`${chatId}\`\n`;
+    message += `2. Thêm vào Vercel Environment Variables:\n`;
+    message += `   • Name: \`CHANNEL_ID\`\n`;
+    message += `   • Value: \`${chatId}\`\n`;
+    message += `3. Deploy lại project\n`;
+    message += `4. Gửi \`/channel_test\` để kiểm tra`;
+  } else {
+    message += `💡 Đây là chat riêng, không cần cấu hình ID.`;
+  }
+
+  ctx.reply(message, { parse_mode: 'Markdown' });
 });
 
 // Xử lý tin nhắn trong Group
