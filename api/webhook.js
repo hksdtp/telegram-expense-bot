@@ -482,16 +482,26 @@ const CHANNEL_ID = process.env.CHANNEL_ID;
 // Group ID để gửi thông báo (thêm vào environment variables)
 const GROUP_ID = process.env.GROUP_ID;
 
-// Hàm gửi nhắc nhở
-async function sendReminder() {
+// Hàm gửi nhắc nhở thông minh
+async function sendSmartReminder() {
   const now = new Date();
+  const hour = now.getHours();
   const timeStr = now.toLocaleTimeString('vi-VN', {
     hour: '2-digit',
     minute: '2-digit',
     timeZone: 'Asia/Ho_Chi_Minh'
   });
 
-  const reminderMessage = `⏰ NHẮC NHỞ GHI CHI TIÊU (${timeStr})\n\n📝 Đừng quên ghi lại các khoản chi tiêu hôm nay!\n\n💡 Gửi tin nhắn theo format:\n• "Mô tả - Số tiền - Phương thức"\n• Ví dụ: "Ăn trưa - 50k - tm"`;
+  let reminderMessage = '';
+
+  // Tùy chỉnh tin nhắn theo thời gian
+  if (hour === 12) {
+    reminderMessage = `🍱 GIỜ ĂN TRƯA RỒI! (${timeStr})\n\n📝 Hôm nay ăn gì? Nhớ ghi chi phí ăn uống nhé!\n\n💡 Ví dụ:\n• "Cơm văn phòng - 45k - tm"\n• "Ship đồ ăn - 80k - tk"`;
+  } else if (hour === 18) {
+    reminderMessage = `🌆 CUỐI NGÀY LÀM VIỆC! (${timeStr})\n\n📝 Hôm nay có chi tiêu gì khác không?\n\n💡 Có thể bạn quên:\n• "Café chiều - 30k - tm"\n• "Đổ xăng về nhà - 500k - tk"\n• "Mua đồ - 200k - tk"`;
+  } else if (hour === 22) {
+    reminderMessage = `🌙 TRƯỚC KHI NGỦ! (${timeStr})\n\n📝 Kiểm tra lại chi tiêu hôm nay nhé!\n\n💡 Đừng quên:\n• "Ăn tối - 100k - tm"\n• "Grab về nhà - 50k - tk"\n• "Mua thuốc - 80k - tm"`;
+  }
 
   for (const userId of reminderUsers) {
     try {
@@ -514,7 +524,7 @@ function checkAndSendReminder() {
 
   // Gửi nhắc nhở vào 12:00, 18:00, 22:00
   if (minute === 0 && (hour === 12 || hour === 18 || hour === 22)) {
-    sendReminder();
+    sendSmartReminder();
   }
 }
 
@@ -531,7 +541,7 @@ bot.start((ctx) => {
 
 // Xử lý lệnh /help
 bot.help((ctx) => {
-  ctx.reply(`📖 HƯỚNG DẪN SỬ DỤNG:\n\n1. Format cơ bản:\n"Ăn sáng 50k tm"\n"Xăng xe 500k tk"\n\n2. Format có dấu gạch ngang:\n"Mô tả - Số tiền - Phương thức"\n"Thanh toán sân pickleball - 2tr - tk"\n\n3. Format với số lượng:\n"Đổ xăng - 1tr - 70L - tk"\n"Mua nước - 50k - 5 chai - tm"\n\n4. Thu nhập/Hoàn tiền:\n"Lương tháng 15 triệu tk"\n"Hoàn 200k tm"\n\n5. Hỗ trợ ngày tháng:\n"Ăn trưa tháng 6 - 50k - tm"\n"Mua đồ ngày 15 - 200k - tk"\n"Cafe 10/6 - 30k - tm"\n\n6. Gửi ảnh hóa đơn kèm chú thích\n\n💳 Phương thức thanh toán:\n• tk/ck = Chuyển khoản\n• tm = Tiền mặt\n\n💰 Đơn vị tiền tệ:\n• k = nghìn (100k = 100,000)\n• tr = triệu (2tr = 2,000,000)\n\n📊 Đơn vị số lượng:\n• L, lít, kg, g, cái, chiếc, ly, chai, hộp, gói, túi, m, cm, km\n\n⏰ Nhắc nhở tự động:\n• 12:00 trưa\n• 18:00 tối\n• 22:00 tối\n\n📋 Lệnh khác:\n/reminder_on - Bật nhắc nhở\n/reminder_off - Tắt nhắc nhở\n/categories - Xem danh mục\n/getid - Lấy Chat ID\n/channel_test - Test kết nối Channel\n/group_test - Test kết nối Group`);
+  ctx.reply(`📖 HƯỚNG DẪN SỬ DỤNG:\n\n1. Format cơ bản:\n"Ăn sáng 50k tm"\n"Xăng xe 500k tk"\n\n2. Format có dấu gạch ngang:\n"Mô tả - Số tiền - Phương thức"\n"Thanh toán sân pickleball - 2tr - tk"\n\n3. Format với số lượng:\n"Đổ xăng - 1tr - 70L - tk"\n"Mua nước - 50k - 5 chai - tm"\n\n4. Thu nhập/Hoàn tiền:\n"Lương tháng 15 triệu tk"\n"Hoàn 200k tm"\n\n5. Hỗ trợ ngày tháng:\n"Ăn trưa tháng 6 - 50k - tm"\n"Mua đồ ngày 15 - 200k - tk"\n"Cafe 10/6 - 30k - tm"\n\n6. Gửi ảnh hóa đơn kèm chú thích\n\n💳 Phương thức thanh toán:\n• tk/ck = Chuyển khoản\n• tm = Tiền mặt\n\n💰 Đơn vị tiền tệ:\n• k = nghìn (100k = 100,000)\n• tr = triệu (2tr = 2,000,000)\n\n📊 Đơn vị số lượng:\n• L, lít, kg, g, cái, chiếc, ly, chai, hộp, gói, túi, m, cm, km\n\n⏰ Nhắc nhở tự động:\n• 12:00 trưa\n• 18:00 tối\n• 22:00 tối\n\n📋 Lệnh khác:\n/reminder_on - Bật nhắc nhở\n/reminder_off - Tắt nhắc nhở\n/categories - Xem danh mục\n/report - Báo cáo chi tiêu tháng\n/getid - Lấy Chat ID\n/channel_test - Test kết nối Channel\n/group_test - Test kết nối Group`);
 });
 
 // Xử lý lệnh /categories
@@ -625,6 +635,137 @@ bot.command('getid', async (ctx) => {
   }
 
   ctx.reply(message, { parse_mode: 'Markdown' });
+});
+
+// Hàm tổng kết chi tiêu theo tháng
+async function getMonthlyReport(month, year) {
+  try {
+    await doc.loadInfo();
+    const sheet = doc.sheetsByIndex[0];
+    const rows = await sheet.getRows();
+
+    const targetMonth = month || new Date().getMonth() + 1;
+    const targetYear = year || new Date().getFullYear();
+
+    let totalExpense = 0;
+    let totalIncome = 0;
+    const categoryStats = {};
+    const paymentMethodStats = {};
+    let transactionCount = 0;
+
+    for (const row of rows) {
+      const dateStr = row.get('Ngày');
+      const amount = parseFloat(row.get('Số tiền')) || 0;
+      const type = row.get('Loại');
+      const category = row.get('Danh mục');
+      const paymentMethod = row.get('Phương thức thanh toán');
+
+      if (dateStr) {
+        const [day, month_row, year_row] = dateStr.split('/').map(Number);
+
+        if (month_row === targetMonth && year_row === targetYear) {
+          transactionCount++;
+
+          if (type === 'expense') {
+            totalExpense += amount;
+          } else if (type === 'income') {
+            totalIncome += amount;
+          }
+
+          // Thống kê theo danh mục
+          if (category) {
+            categoryStats[category] = (categoryStats[category] || 0) + amount;
+          }
+
+          // Thống kê theo phương thức thanh toán
+          if (paymentMethod) {
+            paymentMethodStats[paymentMethod] = (paymentMethodStats[paymentMethod] || 0) + amount;
+          }
+        }
+      }
+    }
+
+    return {
+      month: targetMonth,
+      year: targetYear,
+      totalExpense,
+      totalIncome,
+      balance: totalIncome - totalExpense,
+      categoryStats,
+      paymentMethodStats,
+      transactionCount
+    };
+  } catch (error) {
+    console.error('Lỗi khi tạo báo cáo tháng:', error);
+    return null;
+  }
+}
+
+// Lệnh tổng kết chi tiêu tháng
+bot.command('report', async (ctx) => {
+  const args = ctx.message.text.split(' ');
+  let month, year;
+
+  if (args.length >= 2) {
+    month = parseInt(args[1]);
+    if (args.length >= 3) {
+      year = parseInt(args[2]);
+    }
+  }
+
+  const loadingMsg = await ctx.reply('📊 Đang tạo báo cáo chi tiêu...');
+
+  const report = await getMonthlyReport(month, year);
+
+  if (!report) {
+    return ctx.telegram.editMessageText(
+      ctx.chat.id,
+      loadingMsg.message_id,
+      null,
+      '❌ Không thể tạo báo cáo! Vui lòng thử lại sau.'
+    );
+  }
+
+  let message = `📊 **BÁO CÁO CHI TIÊU THÁNG ${report.month}/${report.year}**\n\n`;
+
+  // Tổng quan
+  message += `💰 **TỔNG QUAN:**\n`;
+  message += `• Chi tiêu: ${report.totalExpense.toLocaleString('vi-VN')} ₫\n`;
+  message += `• Thu nhập: ${report.totalIncome.toLocaleString('vi-VN')} ₫\n`;
+  message += `• Số dư: ${report.balance.toLocaleString('vi-VN')} ₫ ${report.balance >= 0 ? '✅' : '❌'}\n`;
+  message += `• Số giao dịch: ${report.transactionCount}\n\n`;
+
+  // Top 5 danh mục chi tiêu nhiều nhất
+  const topCategories = Object.entries(report.categoryStats)
+    .sort(([,a], [,b]) => b - a)
+    .slice(0, 5);
+
+  if (topCategories.length > 0) {
+    message += `🏆 **TOP DANH MỤC CHI TIÊU:**\n`;
+    topCategories.forEach(([category, amount], index) => {
+      const emoji = categories[category.toLowerCase()]?.emoji || '💰';
+      message += `${index + 1}. ${emoji} ${category}: ${amount.toLocaleString('vi-VN')} ₫\n`;
+    });
+    message += '\n';
+  }
+
+  // Thống kê phương thức thanh toán
+  const paymentMethods = Object.entries(report.paymentMethodStats);
+  if (paymentMethods.length > 0) {
+    message += `💳 **PHƯƠNG THỨC THANH TOÁN:**\n`;
+    paymentMethods.forEach(([method, amount]) => {
+      const percentage = ((amount / report.totalExpense) * 100).toFixed(1);
+      message += `• ${method}: ${amount.toLocaleString('vi-VN')} ₫ (${percentage}%)\n`;
+    });
+  }
+
+  ctx.telegram.editMessageText(
+    ctx.chat.id,
+    loadingMsg.message_id,
+    null,
+    message,
+    { parse_mode: 'Markdown' }
+  );
 });
 
 // Xử lý tin nhắn trong Group
