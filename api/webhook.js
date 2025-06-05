@@ -482,6 +482,13 @@ const CHANNEL_ID = process.env.CHANNEL_ID;
 // Group ID để gửi thông báo (thêm vào environment variables)
 const GROUP_ID = process.env.GROUP_ID;
 
+// Topic IDs cho phân biệt chức năng
+const EXPENSE_TOPIC_ID = process.env.EXPENSE_TOPIC_ID; // Topic Chi tiêu
+const TASK_TOPIC_ID = process.env.TASK_TOPIC_ID; // Topic Nhắc công việc
+
+// Google Sheets ID cho công việc (riêng biệt với chi tiêu)
+const TASK_SHEET_ID = process.env.TASK_SHEET_ID;
+
 // Hàm gửi nhắc nhở thông minh
 async function sendSmartReminder() {
   const now = new Date();
@@ -541,7 +548,7 @@ bot.start((ctx) => {
 
 // Xử lý lệnh /help
 bot.help((ctx) => {
-  ctx.reply(`📖 HƯỚNG DẪN SỬ DỤNG:\n\n1. Format cơ bản:\n"Ăn sáng 50k tm"\n"Xăng xe 500k tk"\n\n2. Format có dấu gạch ngang:\n"Mô tả - Số tiền - Phương thức"\n"Thanh toán sân pickleball - 2tr - tk"\n\n3. Format với số lượng:\n"Đổ xăng - 1tr - 70L - tk"\n"Mua nước - 50k - 5 chai - tm"\n\n4. Thu nhập/Hoàn tiền:\n"Lương tháng 15 triệu tk"\n"Hoàn 200k tm"\n\n5. Hỗ trợ ngày tháng:\n"Ăn trưa tháng 6 - 50k - tm"\n"Mua đồ ngày 15 - 200k - tk"\n"Cafe 10/6 - 30k - tm"\n\n6. Gửi ảnh hóa đơn kèm chú thích\n\n💳 Phương thức thanh toán:\n• tk/ck = Chuyển khoản\n• tm = Tiền mặt\n\n💰 Đơn vị tiền tệ:\n• k = nghìn (100k = 100,000)\n• tr = triệu (2tr = 2,000,000)\n\n📊 Đơn vị số lượng:\n• L, lít, kg, g, cái, chiếc, ly, chai, hộp, gói, túi, m, cm, km\n\n⏰ Nhắc nhở tự động:\n• 12:00 trưa\n• 18:00 tối\n• 22:00 tối\n\n📋 Lệnh khác:\n/reminder_on - Bật nhắc nhở\n/reminder_off - Tắt nhắc nhở\n/categories - Xem danh mục\n/report - Báo cáo chi tiêu tháng\n/getid - Lấy Chat ID\n/channel_test - Test kết nối Channel\n/group_test - Test kết nối Group`);
+  ctx.reply(`📖 HƯỚNG DẪN SỬ DỤNG:\n\n🏷️ **TOPIC CHI TIÊU:**\n1. Format cơ bản:\n"Ăn sáng 50k tm"\n"Xăng xe 500k tk"\n\n2. Format có dấu gạch ngang:\n"Mô tả - Số tiền - Phương thức"\n"Thanh toán sân pickleball - 2tr - tk"\n\n3. Format với số lượng:\n"Đổ xăng - 1tr - 70L - tk"\n"Mua nước - 50k - 5 chai - tm"\n\n4. Thu nhập/Hoàn tiền:\n"Lương tháng 15 triệu tk"\n"Hoàn 200k tm"\n\n5. Hỗ trợ ngày tháng:\n"Ăn trưa tháng 6 - 50k - tm"\n"Mua đồ ngày 15 - 200k - tk"\n\n📋 **TOPIC CÔNG VIỆC:**\n1. Thêm công việc:\n"#cv Hoàn thành báo cáo - 15/6 - Cao"\n"cv: Họp team - Thứ 2 - Bình thường"\n\n2. Format:\n"#cv [Tên công việc] - [Deadline] - [Ưu tiên]"\n\n💳 **Phương thức thanh toán:**\n• tk/ck = Chuyển khoản\n• tm = Tiền mặt\n\n💰 **Đơn vị tiền tệ:**\n• k = nghìn (100k = 100,000)\n• tr = triệu (2tr = 2,000,000)\n\n📊 **Đơn vị số lượng:**\n• L, lít, kg, g, cái, chiếc, ly, chai, hộp, gói, túi, m, cm, km\n\n🎯 **Mức ưu tiên:**\n• Cao, Trung bình, Bình thường, Thấp\n\n⏰ **Nhắc nhở tự động:**\n• 12:00 trưa\n• 18:00 tối\n• 22:00 tối\n\n📋 **Lệnh khác:**\n/reminder_on - Bật nhắc nhở\n/reminder_off - Tắt nhắc nhở\n/categories - Xem danh mục\n/report - Báo cáo chi tiêu tháng\n/getid - Lấy Chat ID\n/channel_test - Test kết nối Channel\n/group_test - Test kết nối Group`);
 });
 
 // Xử lý lệnh /categories
@@ -788,7 +795,64 @@ bot.command('report', async (ctx) => {
   );
 });
 
-// Xử lý tin nhắn trong Group
+// Hàm xử lý công việc
+async function parseTask(text) {
+  // Loại bỏ prefix công việc
+  const cleanText = text.replace(/^(#cv|!task|cv:|task:)\s*/i, '').trim();
+
+  // Phân tích công việc theo format: "Tên công việc - Deadline - Ưu tiên"
+  const parts = cleanText.split(' - ').map(part => part.trim());
+
+  let taskName = cleanText;
+  let deadline = '';
+  let priority = 'Bình thường';
+
+  if (parts.length >= 2) {
+    taskName = parts[0];
+    deadline = parts[1];
+    if (parts.length >= 3) {
+      priority = parts[2];
+    }
+  }
+
+  return {
+    name: taskName,
+    deadline: deadline,
+    priority: priority,
+    status: 'Chưa hoàn thành',
+    createdDate: new Date().toLocaleDateString('vi-VN'),
+    createdTime: new Date().toISOString()
+  };
+}
+
+// Hàm lưu công việc vào Google Sheets
+async function saveTaskToSheet(userId, username, taskData) {
+  try {
+    // Sử dụng sheet riêng cho công việc nếu có
+    const taskSheetId = TASK_SHEET_ID || process.env.GOOGLE_SHEET_ID;
+    const taskDoc = new GoogleSpreadsheet(taskSheetId, serviceAccountAuth);
+
+    await taskDoc.loadInfo();
+    const sheet = taskDoc.sheetsByIndex[0];
+
+    await sheet.addRow({
+      'Ngày tạo': taskData.createdDate,
+      'Tên công việc': taskData.name,
+      'Deadline': taskData.deadline,
+      'Ưu tiên': taskData.priority,
+      'Trạng thái': taskData.status,
+      'Người tạo': `${username} (${userId})`,
+      'Thời gian tạo': taskData.createdTime
+    });
+
+    return true;
+  } catch (error) {
+    console.error('Lỗi khi lưu công việc:', error);
+    return false;
+  }
+}
+
+// Xử lý tin nhắn trong Group với phân biệt Topic
 bot.on('message', async (ctx) => {
   // Chỉ xử lý tin nhắn từ Group được cấu hình hoặc private chat
   const chatId = ctx.chat.id;
@@ -802,54 +866,104 @@ bot.on('message', async (ctx) => {
   // Chỉ xử lý tin nhắn văn bản (không phải lệnh)
   if (ctx.message.text && !ctx.message.text.startsWith('/')) {
     const text = ctx.message.text;
-    const expense = parseExpense(text);
+    const messageThreadId = ctx.message.message_thread_id;
 
-    if (expense.amount <= 0) {
-      return ctx.reply('❌ Không nhận diện được số tiền!\n\n💡 Ví dụ: "Phở bò 55k tm" hoặc "Ứng 5 triệu tk"');
-    }
+    // Kiểm tra xem có phải topic công việc không
+    const isTaskTopic = TASK_TOPIC_ID && messageThreadId && messageThreadId.toString() === TASK_TOPIC_ID;
+    const isExpenseTopic = EXPENSE_TOPIC_ID && messageThreadId && messageThreadId.toString() === EXPENSE_TOPIC_ID;
+    const isTaskKeyword = /^(#cv|!task|cv:|task:)\s+/i.test(text);
 
-    let confirmMsg = `✅ THÔNG TIN GIAO DỊCH:\n\n${expense.emoji} ${expense.category}\n📝 ${expense.description}\n💰 ${expense.amount.toLocaleString('vi-VN')} ₫`;
+    // Xử lý công việc
+    if (isTaskTopic || isTaskKeyword) {
+      const task = parseTask(text);
 
-    // Hiển thị số lượng nếu khác 1
-    if (expense.quantity && expense.quantity !== 1) {
-      confirmMsg += `\n📊 Số lượng: ${expense.quantity}`;
-    }
-
-    confirmMsg += `\n💳 ${expense.paymentMethod}`;
-
-    // Hiển thị ngày nếu khác ngày hiện tại
-    if (expense.customDate) {
-      const now = new Date();
-      const targetDate = expense.customDate;
-      if (targetDate.toDateString() !== now.toDateString()) {
-        confirmMsg += `\n📅 ${targetDate.toLocaleDateString('vi-VN')}`;
+      if (!task.name) {
+        return ctx.reply('❌ Không nhận diện được tên công việc!\n\n💡 Ví dụ:\n• "#cv Hoàn thành báo cáo - 15/6 - Cao"\n• "cv: Họp team - Thứ 2 - Bình thường"');
       }
+
+      let confirmMsg = `✅ THÔNG TIN CÔNG VIỆC:\n\n📋 ${task.name}`;
+      if (task.deadline) confirmMsg += `\n⏰ Deadline: ${task.deadline}`;
+      confirmMsg += `\n🎯 Ưu tiên: ${task.priority}`;
+      confirmMsg += `\n📅 Ngày tạo: ${task.createdDate}`;
+      confirmMsg += '\n\n⏳ Đang lưu...';
+
+      const loadingMsg = await ctx.reply(confirmMsg);
+
+      const saved = await saveTaskToSheet(
+        ctx.from.id,
+        ctx.from.username || ctx.from.first_name,
+        task
+      );
+
+      if (saved) {
+        await ctx.telegram.editMessageText(
+          ctx.chat.id,
+          loadingMsg.message_id,
+          null,
+          confirmMsg.replace('⏳ Đang lưu...', '✅ ĐÃ LƯU THÀNH CÔNG!')
+        );
+      } else {
+        await ctx.telegram.editMessageText(
+          ctx.chat.id,
+          loadingMsg.message_id,
+          null,
+          '❌ LỖI KHI LƯU CÔNG VIỆC!'
+        );
+      }
+      return;
     }
 
-    confirmMsg += '\n\n⏳ Đang lưu...';
+    // Xử lý chi tiêu (logic cũ)
+    if (!isTaskTopic && !isTaskKeyword) {
+      const expense = parseExpense(text);
 
-    const loadingMsg = await ctx.reply(confirmMsg);
+      if (expense.amount <= 0) {
+        return ctx.reply('❌ Không nhận diện được số tiền!\n\n💡 Ví dụ: "Phở bò 55k tm" hoặc "Ứng 5 triệu tk"');
+      }
 
-    const saved = await saveToSheet(
-      ctx.from.id,
-      ctx.from.username || ctx.from.first_name,
-      expense
-    );
+      let confirmMsg = `✅ THÔNG TIN GIAO DỊCH:\n\n${expense.emoji} ${expense.category}\n📝 ${expense.description}\n💰 ${expense.amount.toLocaleString('vi-VN')} ₫`;
 
-    if (saved) {
-      await ctx.telegram.editMessageText(
-        ctx.chat.id,
-        loadingMsg.message_id,
-        null,
-        confirmMsg.replace('⏳ Đang lưu...', '✅ ĐÃ LƯU THÀNH CÔNG!')
+      // Hiển thị số lượng nếu khác 1
+      if (expense.quantity && expense.quantity !== 1) {
+        confirmMsg += `\n📊 Số lượng: ${expense.quantity}`;
+      }
+
+      confirmMsg += `\n💳 ${expense.paymentMethod}`;
+
+      // Hiển thị ngày nếu khác ngày hiện tại
+      if (expense.customDate) {
+        const now = new Date();
+        const targetDate = expense.customDate;
+        if (targetDate.toDateString() !== now.toDateString()) {
+          confirmMsg += `\n📅 ${targetDate.toLocaleDateString('vi-VN')}`;
+        }
+      }
+
+      confirmMsg += '\n\n⏳ Đang lưu...';
+
+      const loadingMsg = await ctx.reply(confirmMsg);
+
+      const saved = await saveToSheet(
+        ctx.from.id,
+        ctx.from.username || ctx.from.first_name,
+        expense
       );
-    } else {
-      await ctx.telegram.editMessageText(
-        ctx.chat.id,
-        loadingMsg.message_id,
-        null,
-        '❌ LỖI KHI LƯU DỮ LIỆU!'
-      );
+
+      if (saved) {
+        await ctx.telegram.editMessageText(
+          ctx.chat.id,
+          loadingMsg.message_id,
+          null,
+          confirmMsg.replace('⏳ Đang lưu...', '✅ ĐÃ LƯU THÀNH CÔNG!')
+        );
+      } else {
+        await ctx.telegram.editMessageText(
+          ctx.chat.id,
+          loadingMsg.message_id,
+          null,
+          '❌ LỖI KHI LƯU DỮ LIỆU!'
+        );
+      }
     }
   }
 });
