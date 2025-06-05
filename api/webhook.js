@@ -615,11 +615,19 @@ bot.command('getid', async (ctx) => {
   const chatId = ctx.chat.id;
   const chatType = ctx.chat.type;
   const chatTitle = ctx.chat.title || ctx.chat.first_name || 'Unknown';
+  const messageThreadId = ctx.message.message_thread_id;
 
   let message = `🆔 **THÔNG TIN CHAT**\n\n`;
   message += `📋 **Chat ID:** \`${chatId}\`\n`;
   message += `📝 **Loại:** ${chatType}\n`;
-  message += `🏷️ **Tên:** ${chatTitle}\n\n`;
+  message += `🏷️ **Tên:** ${chatTitle}\n`;
+
+  // Hiển thị Topic ID nếu có
+  if (messageThreadId) {
+    message += `🏷️ **Topic ID:** \`${messageThreadId}\`\n`;
+  }
+
+  message += `\n`;
 
   if (chatType === 'group' || chatType === 'supergroup') {
     message += `💡 **Hướng dẫn:**\n`;
@@ -627,7 +635,18 @@ bot.command('getid', async (ctx) => {
     message += `2. Thêm vào Vercel Environment Variables:\n`;
     message += `   • Name: \`GROUP_ID\`\n`;
     message += `   • Value: \`${chatId}\`\n`;
-    message += `3. Deploy lại project\n`;
+
+    if (messageThreadId) {
+      message += `\n🏷️ **Cấu hình Topic:**\n`;
+      message += `• Nếu đây là Topic Chi tiêu:\n`;
+      message += `  Name: \`EXPENSE_TOPIC_ID\`\n`;
+      message += `  Value: \`${messageThreadId}\`\n`;
+      message += `• Nếu đây là Topic Công việc:\n`;
+      message += `  Name: \`TASK_TOPIC_ID\`\n`;
+      message += `  Value: \`${messageThreadId}\`\n`;
+    }
+
+    message += `\n3. Deploy lại project\n`;
     message += `4. Gửi \`/group_test\` để kiểm tra`;
   } else if (chatType === 'channel') {
     message += `💡 **Hướng dẫn:**\n`;
