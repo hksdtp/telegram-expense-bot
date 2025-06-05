@@ -462,7 +462,7 @@ async function saveToSheet(userId, username, expenseData, imageUrl = '') {
     });
 
     // Gửi thông báo lên Channel/Group sau khi lưu thành công
-    await sendToChannelOrGroup(expenseData, username, imageUrl);
+    // await sendToChannelOrGroup(expenseData, username, imageUrl); // Tạm tắt để tránh trùng lặp
 
     return true;
   } catch (error) {
