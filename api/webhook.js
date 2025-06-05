@@ -54,30 +54,74 @@ const paymentMethods = {
 // Hàm phân tích chi tiêu cải tiến
 function parseExpense(text) {
   const input = text.toLowerCase().trim();
-  
-  // Regex cải tiến cho số tiền
-  const amountRegex = /(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?)\s*(k|tr|nghìn|triệu|đ|đồng|d|vnd)?\b/gi;
-  const amountMatches = [...input.matchAll(amountRegex)];
+  let originalText = text.trim();
 
+  // Kiểm tra xem có sử dụng format với dấu - không
+  const hasDashFormat = text.includes(' - ');
+  let description = '';
   let amount = 0;
   let amountText = '';
+  let paymentMethodFromText = '';
 
-  // Tìm số tiền hợp lệ nhất (lớn nhất)
-  for (const match of amountMatches) {
-    let value = parseFloat(match[1].replace(/\./g, '').replace(/,/g, '.'));
-    const unit = match[2] ? match[2].toLowerCase() : '';
+  if (hasDashFormat) {
+    // Xử lý format: "mô tả - số tiền - phương thức"
+    const parts = originalText.split(' - ').map(part => part.trim());
 
-    if (unit.includes('k') || unit.includes('nghìn')) value *= 1000;
-    else if (unit.includes('tr') || unit.includes('triệu')) value *= 1000000;
+    if (parts.length >= 2) {
+      description = parts[0]; // Phần đầu là mô tả
 
-    if (value > amount) {
-      amount = value;
-      amountText = match[0];
+      // Tìm số tiền trong các phần còn lại
+      for (let i = 1; i < parts.length; i++) {
+        const part = parts[i];
+        const amountRegex = /(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?)\s*(k|tr|nghìn|triệu|đ|đồng|d|vnd)?\b/gi;
+        const amountMatch = part.match(amountRegex);
+
+        if (amountMatch && amountMatch.length > 0) {
+          const match = amountMatch[0];
+          const numberMatch = match.match(/(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?)/);
+          const unitMatch = match.match(/(k|tr|nghìn|triệu|đ|đồng|d|vnd)/i);
+
+          if (numberMatch) {
+            let value = parseFloat(numberMatch[1].replace(/\./g, '').replace(/,/g, '.'));
+            const unit = unitMatch ? unitMatch[1].toLowerCase() : '';
+
+            if (unit.includes('k') || unit.includes('nghìn')) value *= 1000;
+            else if (unit.includes('tr') || unit.includes('triệu')) value *= 1000000;
+
+            amount = value;
+            amountText = match;
+            break;
+          }
+        } else {
+          // Nếu không phải số tiền, có thể là phương thức thanh toán
+          if (part.length <= 10) { // Giới hạn độ dài để tránh nhầm lẫn
+            paymentMethodFromText = part;
+          }
+        }
+      }
     }
+  } else {
+    // Xử lý format cũ
+    const amountRegex = /(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?)\s*(k|tr|nghìn|triệu|đ|đồng|d|vnd)?\b/gi;
+    const amountMatches = [...input.matchAll(amountRegex)];
+
+    // Tìm số tiền hợp lệ nhất (lớn nhất)
+    for (const match of amountMatches) {
+      let value = parseFloat(match[1].replace(/\./g, '').replace(/,/g, '.'));
+      const unit = match[2] ? match[2].toLowerCase() : '';
+
+      if (unit.includes('k') || unit.includes('nghìn')) value *= 1000;
+      else if (unit.includes('tr') || unit.includes('triệu')) value *= 1000000;
+
+      if (value > amount) {
+        amount = value;
+        amountText = match[0];
+      }
+    }
+
+    // Loại bỏ số tiền khỏi mô tả
+    description = originalText.replace(amountText, '').trim();
   }
-  
-  // Loại bỏ số tiền khỏi mô tả
-  const description = text.replace(amountText, '').trim();
 
   let category = 'Chi phí khác';
   let emoji = '💰';
@@ -135,10 +179,21 @@ function parseExpense(text) {
     }
     
     // Xác định phương thức thanh toán
-    for (const method in paymentMethods) {
-      if (input.includes(method)) {
-        paymentMethod = paymentMethods[method];
-        break;
+    if (paymentMethodFromText) {
+      // Ưu tiên phương thức từ format có dấu -
+      for (const method in paymentMethods) {
+        if (paymentMethodFromText.toLowerCase().includes(method)) {
+          paymentMethod = paymentMethods[method];
+          break;
+        }
+      }
+    } else {
+      // Tìm trong toàn bộ text
+      for (const method in paymentMethods) {
+        if (input.includes(method)) {
+          paymentMethod = paymentMethods[method];
+          break;
+        }
       }
     }
   }
@@ -286,7 +341,7 @@ bot.start((ctx) => {
 
 // Xử lý lệnh /help
 bot.help((ctx) => {
-  ctx.reply(`📖 HƯỚNG DẪN SỬ DỤNG:\n\n1. Nhập chi tiêu:\n"Ăn sáng 50k tm"\n"Xăng xe 500k tk"\n\n2. Nhập thu nhập:\n"Lương tháng 15 triệu tk"\n"Hoàn tiền 200k tm"\n\n3. Gửi ảnh hóa đơn kèm chú thích\n\n💳 Phương thức thanh toán:\n• tk = Chuyển khoản\n• tm = Tiền mặt`);
+  ctx.reply(`📖 HƯỚNG DẪN SỬ DỤNG:\n\n1. Format cơ bản:\n"Ăn sáng 50k tm"\n"Xăng xe 500k tk"\n\n2. Format có dấu gạch ngang:\n"Mô tả - Số tiền - Phương thức"\n"Thanh toán sân pickleball - 2tr - tk"\n\n3. Thu nhập/Hoàn tiền:\n"Lương tháng 15 triệu tk"\n"Hoàn 200k tm"\n\n4. Gửi ảnh hóa đơn kèm chú thích\n\n💳 Phương thức thanh toán:\n• tk = Chuyển khoản\n• tm = Tiền mặt\n\n💰 Đơn vị tiền tệ:\n• k = nghìn (100k = 100,000)\n• tr = triệu (2tr = 2,000,000)`);
 });
 
 // Xử lý lệnh /categories
