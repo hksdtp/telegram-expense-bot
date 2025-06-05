@@ -51,10 +51,57 @@ const paymentMethods = {
   'cash': 'Tiền mặt'
 };
 
+// Hàm phân tích ngày tháng
+function parseDateTime(text) {
+  const input = text.toLowerCase();
+  const now = new Date();
+  let targetDate = new Date(now);
+
+  // Regex cho các pattern ngày tháng
+  const monthPattern = /tháng\s*(\d{1,2})/;
+  const dayPattern = /ngày\s*(\d{1,2})/;
+  const datePattern = /(\d{1,2})\/(\d{1,2})/; // dd/mm
+
+  const monthMatch = input.match(monthPattern);
+  const dayMatch = input.match(dayPattern);
+  const dateMatch = input.match(datePattern);
+
+  if (dateMatch) {
+    // Format dd/mm
+    const day = parseInt(dateMatch[1]);
+    const month = parseInt(dateMatch[2]) - 1; // JavaScript month is 0-based
+    targetDate.setDate(day);
+    targetDate.setMonth(month);
+  } else {
+    if (monthMatch) {
+      const month = parseInt(monthMatch[1]) - 1;
+      targetDate.setMonth(month);
+      // Nếu tháng đã qua trong năm nay, chuyển sang năm sau
+      if (targetDate < now) {
+        targetDate.setFullYear(now.getFullYear() + 1);
+      }
+    }
+
+    if (dayMatch) {
+      const day = parseInt(dayMatch[1]);
+      targetDate.setDate(day);
+      // Nếu ngày đã qua trong tháng này, chuyển sang tháng sau
+      if (targetDate < now) {
+        targetDate.setMonth(targetDate.getMonth() + 1);
+      }
+    }
+  }
+
+  return targetDate;
+}
+
 // Hàm phân tích chi tiêu cải tiến
 function parseExpense(text) {
   const input = text.toLowerCase().trim();
   let originalText = text.trim();
+
+  // Phân tích ngày tháng
+  const customDate = parseDateTime(text);
 
   // Kiểm tra xem có sử dụng format với dấu - không
   const hasDashFormat = text.includes(' - ');
@@ -206,7 +253,8 @@ function parseExpense(text) {
     paymentMethod,
     quantity,
     type,
-    description
+    description,
+    customDate
   };
 }
 
@@ -308,8 +356,9 @@ async function saveToSheet(userId, username, expenseData, imageUrl = '') {
     const sheet = doc.sheetsByIndex[0];
 
     const now = new Date();
-    const dateStr = now.toLocaleDateString('vi-VN');
-    const isoTime = now.toISOString();
+    const targetDate = expenseData.customDate || now;
+    const dateStr = targetDate.toLocaleDateString('vi-VN');
+    const isoTime = targetDate.toISOString();
 
     await sheet.addRow({
       'Ngày': dateStr,
@@ -334,26 +383,84 @@ async function saveToSheet(userId, username, expenseData, imageUrl = '') {
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
+// Danh sách user ID để nhắc nhở (có thể lưu vào database sau)
+const reminderUsers = new Set();
+
+// Hàm gửi nhắc nhở
+async function sendReminder() {
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Ho_Chi_Minh'
+  });
+
+  const reminderMessage = `⏰ NHẮC NHỞ GHI CHI TIÊU (${timeStr})\n\n📝 Đừng quên ghi lại các khoản chi tiêu hôm nay!\n\n💡 Gửi tin nhắn theo format:\n• "Mô tả - Số tiền - Phương thức"\n• Ví dụ: "Ăn trưa - 50k - tm"`;
+
+  for (const userId of reminderUsers) {
+    try {
+      await bot.telegram.sendMessage(userId, reminderMessage);
+    } catch (error) {
+      console.error(`Lỗi gửi nhắc nhở cho user ${userId}:`, error);
+      // Xóa user nếu bot bị block
+      if (error.code === 403) {
+        reminderUsers.delete(userId);
+      }
+    }
+  }
+}
+
+// Hàm kiểm tra và gửi nhắc nhở theo giờ
+function checkAndSendReminder() {
+  const now = new Date();
+  const hour = now.getHours();
+  const minute = now.getMinutes();
+
+  // Gửi nhắc nhở vào 12:00, 18:00, 22:00
+  if (minute === 0 && (hour === 12 || hour === 18 || hour === 22)) {
+    sendReminder();
+  }
+}
+
+// Thiết lập interval để kiểm tra mỗi phút
+setInterval(checkAndSendReminder, 60000);
+
 // Xử lý lệnh /start
 bot.start((ctx) => {
-  ctx.reply(`👋 Xin chào ${ctx.from.first_name}!\n\n📝 Nhập chi tiêu theo cú pháp:\n"Mô tả [số tiền] [phương thức]\n\nVí dụ: "Phở bò 55k tm" hoặc "Ứng 5 triệu tk"`);
+  const userId = ctx.from.id;
+  reminderUsers.add(userId); // Tự động đăng ký nhắc nhở
+
+  ctx.reply(`👋 Xin chào ${ctx.from.first_name}!\n\n📝 Nhập chi tiêu theo cú pháp:\n"Mô tả [số tiền] [phương thức]\n\nVí dụ: "Phở bò 55k tm" hoặc "Ứng 5 triệu tk"\n\n⏰ Bot sẽ tự động nhắc bạn ghi chi tiêu vào 12:00, 18:00 và 22:00 hàng ngày.\n\n📖 Gõ /help để xem hướng dẫn chi tiết`);
 });
 
 // Xử lý lệnh /help
 bot.help((ctx) => {
-  ctx.reply(`📖 HƯỚNG DẪN SỬ DỤNG:\n\n1. Format cơ bản:\n"Ăn sáng 50k tm"\n"Xăng xe 500k tk"\n\n2. Format có dấu gạch ngang:\n"Mô tả - Số tiền - Phương thức"\n"Thanh toán sân pickleball - 2tr - tk"\n\n3. Thu nhập/Hoàn tiền:\n"Lương tháng 15 triệu tk"\n"Hoàn 200k tm"\n\n4. Gửi ảnh hóa đơn kèm chú thích\n\n💳 Phương thức thanh toán:\n• tk = Chuyển khoản\n• tm = Tiền mặt\n\n💰 Đơn vị tiền tệ:\n• k = nghìn (100k = 100,000)\n• tr = triệu (2tr = 2,000,000)`);
+  ctx.reply(`📖 HƯỚNG DẪN SỬ DỤNG:\n\n1. Format cơ bản:\n"Ăn sáng 50k tm"\n"Xăng xe 500k tk"\n\n2. Format có dấu gạch ngang:\n"Mô tả - Số tiền - Phương thức"\n"Thanh toán sân pickleball - 2tr - tk"\n\n3. Thu nhập/Hoàn tiền:\n"Lương tháng 15 triệu tk"\n"Hoàn 200k tm"\n\n4. Hỗ trợ ngày tháng:\n"Ăn trưa tháng 6 - 50k - tm"\n"Mua đồ ngày 15 - 200k - tk"\n"Cafe 10/6 - 30k - tm"\n\n5. Gửi ảnh hóa đơn kèm chú thích\n\n💳 Phương thức thanh toán:\n• tk = Chuyển khoản\n• tm = Tiền mặt\n\n💰 Đơn vị tiền tệ:\n• k = nghìn (100k = 100,000)\n• tr = triệu (2tr = 2,000,000)\n\n⏰ Nhắc nhở tự động:\n• 12:00 trưa\n• 18:00 tối\n• 22:00 tối\n\n📋 Lệnh khác:\n/reminder_on - Bật nhắc nhở\n/reminder_off - Tắt nhắc nhở\n/categories - Xem danh mục`);
 });
 
 // Xử lý lệnh /categories
 bot.command('categories', (ctx) => {
   let message = `📋 DANH MỤC CHI TIÊU:\n\n`;
-  
+
   for (const [category, data] of Object.entries(categories)) {
     message += `${data.emoji} ${category.charAt(0).toUpperCase() + category.slice(1)}:\n`;
     message += `• ${data.subcategories.join(', ')}\n\n`;
   }
-  
+
   ctx.reply(message);
+});
+
+// Xử lý lệnh bật/tắt nhắc nhở
+bot.command('reminder_on', (ctx) => {
+  const userId = ctx.from.id;
+  reminderUsers.add(userId);
+  ctx.reply('✅ Đã BẬT nhắc nhở tự động!\n\n⏰ Bot sẽ nhắc bạn ghi chi tiêu vào:\n• 12:00 trưa\n• 18:00 tối\n• 22:00 tối');
+});
+
+bot.command('reminder_off', (ctx) => {
+  const userId = ctx.from.id;
+  reminderUsers.delete(userId);
+  ctx.reply('❌ Đã TẮT nhắc nhở tự động!\n\n💡 Gõ /reminder_on để bật lại');
 });
 
 // Xử lý tin nhắn văn bản
@@ -367,7 +474,18 @@ bot.on('text', async (ctx) => {
     return ctx.reply('❌ Không nhận diện được số tiền!\n\n💡 Ví dụ: "Phở bò 55k tm" hoặc "Ứng 5 triệu tk"');
   }
 
-  const confirmMsg = `✅ THÔNG TIN GIAO DỊCH:\n\n${expense.emoji} ${expense.category}\n📝 ${expense.description}\n💰 ${expense.amount.toLocaleString('vi-VN')} ₫\n💳 ${expense.paymentMethod}\n\n⏳ Đang lưu...`;
+  let confirmMsg = `✅ THÔNG TIN GIAO DỊCH:\n\n${expense.emoji} ${expense.category}\n📝 ${expense.description}\n💰 ${expense.amount.toLocaleString('vi-VN')} ₫\n💳 ${expense.paymentMethod}`;
+
+  // Hiển thị ngày nếu khác ngày hiện tại
+  if (expense.customDate) {
+    const now = new Date();
+    const targetDate = expense.customDate;
+    if (targetDate.toDateString() !== now.toDateString()) {
+      confirmMsg += `\n📅 ${targetDate.toLocaleDateString('vi-VN')}`;
+    }
+  }
+
+  confirmMsg += '\n\n⏳ Đang lưu...';
 
   const loadingMsg = await ctx.reply(confirmMsg);
 
@@ -425,7 +543,18 @@ bot.on('photo', async (ctx) => {
     
     await pipeline(response.data, fs.createWriteStream(tempFilePath));
     
-    const confirmMsg = `✅ THÔNG TIN TỪ ẢNH:\n\n${expense.emoji} ${expense.category}\n📝 ${expense.description}\n💰 ${expense.amount.toLocaleString('vi-VN')} ₫\n💳 ${expense.paymentMethod}\n\n⏳ Đang tải ảnh lên Drive...`;
+    let confirmMsg = `✅ THÔNG TIN TỪ ẢNH:\n\n${expense.emoji} ${expense.category}\n📝 ${expense.description}\n💰 ${expense.amount.toLocaleString('vi-VN')} ₫\n💳 ${expense.paymentMethod}`;
+
+    // Hiển thị ngày nếu khác ngày hiện tại
+    if (expense.customDate) {
+      const now = new Date();
+      const targetDate = expense.customDate;
+      if (targetDate.toDateString() !== now.toDateString()) {
+        confirmMsg += `\n📅 ${targetDate.toLocaleDateString('vi-VN')}`;
+      }
+    }
+
+    confirmMsg += '\n\n⏳ Đang tải ảnh lên Drive...';
     const loadingMsg = await ctx.reply(confirmMsg);
     
     // Upload ảnh lên Drive theo tháng/năm
