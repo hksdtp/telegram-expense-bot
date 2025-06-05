@@ -349,6 +349,35 @@ async function uploadImageToDrive(filePath, fileName) {
   }
 }
 
+// Gửi thông báo lên Channel
+async function sendToChannel(expenseData, username, imageUrl = '') {
+  if (!CHANNEL_ID) return;
+
+  try {
+    const targetDate = expenseData.customDate || new Date();
+    const dateStr = targetDate.toLocaleDateString('vi-VN');
+
+    let message = `💰 **GIAO DỊCH MỚI**\n\n`;
+    message += `${expenseData.emoji} **${expenseData.category}**\n`;
+    message += `📝 ${expenseData.description}\n`;
+    message += `💰 ${expenseData.amount.toLocaleString('vi-VN')} ₫\n`;
+    message += `💳 ${expenseData.paymentMethod}\n`;
+    message += `📅 ${dateStr}\n`;
+    message += `👤 ${username}`;
+
+    if (imageUrl) {
+      message += `\n📎 [Xem hóa đơn](${imageUrl})`;
+    }
+
+    await bot.telegram.sendMessage(CHANNEL_ID, message, {
+      parse_mode: 'Markdown',
+      disable_web_page_preview: true
+    });
+  } catch (error) {
+    console.error('Lỗi khi gửi lên Channel:', error);
+  }
+}
+
 // Lưu dữ liệu vào Google Sheets
 async function saveToSheet(userId, username, expenseData, imageUrl = '') {
   try {
@@ -374,6 +403,9 @@ async function saveToSheet(userId, username, expenseData, imageUrl = '') {
       'Ghi chú': `${username} (${userId})`
     });
 
+    // Gửi thông báo lên Channel sau khi lưu thành công
+    await sendToChannel(expenseData, username, imageUrl);
+
     return true;
   } catch (error) {
     console.error('Lỗi khi lưu vào sheet:', error);
@@ -385,6 +417,9 @@ const bot = new Telegraf(process.env.BOT_TOKEN);
 
 // Danh sách user ID để nhắc nhở (có thể lưu vào database sau)
 const reminderUsers = new Set();
+
+// Channel ID để gửi thông báo (thêm vào environment variables)
+const CHANNEL_ID = process.env.CHANNEL_ID;
 
 // Hàm gửi nhắc nhở
 async function sendReminder() {
@@ -461,6 +496,23 @@ bot.command('reminder_off', (ctx) => {
   const userId = ctx.from.id;
   reminderUsers.delete(userId);
   ctx.reply('❌ Đã TẮT nhắc nhở tự động!\n\n💡 Gõ /reminder_on để bật lại');
+});
+
+// Lệnh kiểm tra Channel
+bot.command('channel_test', async (ctx) => {
+  if (!CHANNEL_ID) {
+    return ctx.reply('❌ Chưa cấu hình CHANNEL_ID trong environment variables');
+  }
+
+  try {
+    await bot.telegram.sendMessage(CHANNEL_ID, '🧪 **TEST CHANNEL**\n\nBot đã kết nối thành công với Channel!', {
+      parse_mode: 'Markdown'
+    });
+    ctx.reply('✅ Đã gửi tin nhắn test lên Channel thành công!');
+  } catch (error) {
+    console.error('Lỗi test Channel:', error);
+    ctx.reply(`❌ Lỗi khi gửi lên Channel: ${error.message}`);
+  }
 });
 
 // Xử lý tin nhắn văn bản
