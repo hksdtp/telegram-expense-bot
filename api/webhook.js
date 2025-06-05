@@ -38,7 +38,8 @@ const categories = {
   'mua đồ': { emoji: '🛒', subcategories: ['quần áo', 'giày dép', 'mỹ phẩm'] },
   'dịch vụ': { emoji: '🔧', subcategories: ['cắt tóc', 'massage', 'spa'] },
   'chi phí khác': { emoji: '💰', subcategories: ['khác', 'linh tinh'] },
-  'thu nhập': { emoji: '💵', subcategories: ['lương', 'thưởng', 'ứng', 'hoàn'] }
+  'thu nhập': { emoji: '💵', subcategories: ['lương', 'thưởng', 'ứng'] },
+  'hoàn về': { emoji: '💸', subcategories: ['tài khoản', 'hoàn tiền', 'refund'] }
 };
 
 const paymentMethods = {
@@ -55,20 +56,20 @@ function parseExpense(text) {
   const input = text.toLowerCase().trim();
   
   // Regex cải tiến cho số tiền
-  const amountRegex = /(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?)\s*(k|nghìn|triệu|đ|đồng|d|vnd)?\b/gi;
+  const amountRegex = /(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?)\s*(k|tr|nghìn|triệu|đ|đồng|d|vnd)?\b/gi;
   const amountMatches = [...input.matchAll(amountRegex)];
-  
+
   let amount = 0;
   let amountText = '';
-  
+
   // Tìm số tiền hợp lệ nhất (lớn nhất)
   for (const match of amountMatches) {
     let value = parseFloat(match[1].replace(/\./g, '').replace(/,/g, '.'));
     const unit = match[2] ? match[2].toLowerCase() : '';
-    
+
     if (unit.includes('k') || unit.includes('nghìn')) value *= 1000;
-    else if (unit.includes('triệu')) value *= 1000000;
-    
+    else if (unit.includes('tr') || unit.includes('triệu')) value *= 1000000;
+
     if (value > amount) {
       amount = value;
       amountText = match[0];
@@ -86,8 +87,25 @@ function parseExpense(text) {
   let type = 'Chi';
 
   // Phát hiện loại giao dịch
-  const incomeKeywords = ['thu', 'nhận', 'lương', 'ứng', 'hoàn'];
-  if (incomeKeywords.some(keyword => input.includes(keyword))) {
+  const incomeKeywords = ['thu', 'nhận', 'lương', 'ứng'];
+  const refundKeywords = ['hoàn'];
+
+  if (refundKeywords.some(keyword => input.includes(keyword))) {
+    type = 'Thu';
+    category = 'Hoàn về';
+    emoji = '💸';
+    subcategory = 'Tài khoản';
+
+    // Tạo mô tả chi tiết cho hoàn tiền
+    if (description.toLowerCase().includes('hoàn')) {
+      const cleanDesc = description.replace(/\d+[\s]*[ktr]*[\s]*(nghìn|triệu|đ|đồng|d|vnd)*/gi, '').trim();
+      if (cleanDesc.length > 0) {
+        description = `Hoàn về tài khoản - ${cleanDesc}`;
+      } else {
+        description = 'Hoàn về tài khoản';
+      }
+    }
+  } else if (incomeKeywords.some(keyword => input.includes(keyword))) {
     type = 'Thu';
     category = 'Thu nhập';
     emoji = '💵';
