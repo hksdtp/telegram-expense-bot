@@ -137,10 +137,53 @@ function parseExpense(text) {
   };
 }
 
-// Upload ảnh lên Google Drive
+// Tìm hoặc tạo thư mục theo tháng và năm
+async function findOrCreateMonthYearFolder(year, month) {
+  try {
+    const parentFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+    const folderName = `${year}_${month}`;
+    
+    // Tìm thư mục nếu đã tồn tại
+    const searchResponse = await drive.files.list({
+      q: `mimeType='application/vnd.google-apps.folder' and name='${folderName}' and '${parentFolderId}' in parents and trashed=false`,
+      fields: 'files(id, name)',
+      spaces: 'drive'
+    });
+    
+    // Nếu thư mục đã tồn tại, trả về ID
+    if (searchResponse.data.files.length > 0) {
+      return searchResponse.data.files[0].id;
+    }
+    
+    // Nếu chưa tồn tại, tạo thư mục mới
+    const folderMetadata = {
+      name: folderName,
+      mimeType: 'application/vnd.google-apps.folder',
+      parents: [parentFolderId]
+    };
+    
+    const folder = await drive.files.create({
+      resource: folderMetadata,
+      fields: 'id'
+    });
+    
+    return folder.data.id;
+  } catch (error) {
+    console.error('Lỗi khi tìm/tạo thư mục:', error);
+    // Trả về thư mục gốc nếu có lỗi
+    return process.env.GOOGLE_DRIVE_FOLDER_ID;
+  }
+}
+
+// Upload ảnh lên Google Drive theo tháng/năm
 async function uploadImageToDrive(filePath, fileName) {
   try {
-    const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = (now.getMonth() + 1).toString().padStart(2, '0'); // Tháng từ 01-12
+    
+    // Tìm hoặc tạo thư mục tháng/năm
+    const folderId = await findOrCreateMonthYearFolder(year, month);
     
     const response = await drive.files.create({
       requestBody: {
@@ -175,7 +218,13 @@ async function uploadImageToDrive(filePath, fileName) {
     return null;
   } finally {
     // Xóa file tạm
-    fs.unlinkSync(filePath);
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    } catch (err) {
+      console.error('Lỗi khi xóa file tạm:', err);
+    }
   }
 }
 
@@ -292,7 +341,7 @@ bot.on('photo', async (ctx) => {
   
   // Tải ảnh về
   const fileUrl = await ctx.telegram.getFileLink(fileId);
-  const tempFilePath = `./temp_${fileId}.jpg`;
+  const tempFilePath = `/tmp/temp_${fileId}.jpg`;
   
   try {
     const response = await axios({
@@ -306,7 +355,7 @@ bot.on('photo', async (ctx) => {
     const confirmMsg = `✅ THÔNG TIN TỪ ẢNH:\n\n${expense.emoji} ${expense.category}\n📝 ${expense.description}\n💰 ${expense.amount.toLocaleString('vi-VN')} ₫\n💳 ${expense.paymentMethod}\n\n⏳ Đang tải ảnh lên Drive...`;
     const loadingMsg = await ctx.reply(confirmMsg);
     
-    // Upload ảnh lên Drive
+    // Upload ảnh lên Drive theo tháng/năm
     const imageUrl = await uploadImageToDrive(tempFilePath, `hoa_don_${Date.now()}.jpg`);
     
     if (!imageUrl) {
