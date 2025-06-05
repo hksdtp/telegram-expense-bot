@@ -465,7 +465,7 @@ bot.start((ctx) => {
   const userId = ctx.from.id;
   reminderUsers.add(userId); // Tự động đăng ký nhắc nhở
 
-  ctx.reply(`👋 Xin chào ${ctx.from.first_name}!\n\n📝 Nhập chi tiêu theo cú pháp:\n"Mô tả [số tiền] [phương thức]\n\nVí dụ: "Phở bò 55k tm" hoặc "Ứng 5 triệu tk"\n\n⏰ Bot sẽ tự động nhắc bạn ghi chi tiêu vào 12:00, 18:00 và 22:00 hàng ngày.\n\n📖 Gõ /help để xem hướng dẫn chi tiết`);
+  ctx.reply(`👋 Xin chào ${ctx.from.first_name}!\n\n📝 Nhập chi tiêu theo cú pháp:\n"Mô tả [số tiền] [phương thức]\n\nVí dụ: "Phở bò 55k tm" hoặc "Ứng 5 triệu tk"`);
 });
 
 // Xử lý lệnh /help
