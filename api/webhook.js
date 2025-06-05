@@ -111,19 +111,26 @@ function parseExpense(text) {
   let paymentMethodFromText = '';
 
   if (hasDashFormat) {
-    // Xử lý format: "mô tả - số tiền - phương thức"
+    // Xử lý format: "mô tả - số tiền - số lượng - phương thức"
     const parts = originalText.split(' - ').map(part => part.trim());
 
     if (parts.length >= 2) {
       description = parts[0]; // Phần đầu là mô tả
 
-      // Tìm số tiền trong các phần còn lại
+      // Tìm số tiền, số lượng và phương thức trong các phần còn lại
       for (let i = 1; i < parts.length; i++) {
         const part = parts[i];
+
+        // Kiểm tra xem có phải số tiền không
         const amountRegex = /(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?)\s*(k|tr|nghìn|triệu|đ|đồng|d|vnd)?\b/gi;
         const amountMatch = part.match(amountRegex);
 
-        if (amountMatch && amountMatch.length > 0) {
+        // Kiểm tra xem có phải số lượng không (ví dụ: 70L, 5kg, 10 cái)
+        const quantityRegex = /(\d+(?:[.,]\d+)?)\s*(l|lít|kg|g|gram|cái|chiếc|ly|chai|hộp|gói|túi|m|cm|km)\b/gi;
+        const quantityMatch = part.match(quantityRegex);
+
+        if (amountMatch && amountMatch.length > 0 && !quantityMatch) {
+          // Đây là số tiền
           const match = amountMatch[0];
           const numberMatch = match.match(/(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?)/);
           const unitMatch = match.match(/(k|tr|nghìn|triệu|đ|đồng|d|vnd)/i);
@@ -137,13 +144,17 @@ function parseExpense(text) {
 
             amount = value;
             amountText = match;
-            break;
           }
-        } else {
-          // Nếu không phải số tiền, có thể là phương thức thanh toán
-          if (part.length <= 10) { // Giới hạn độ dài để tránh nhầm lẫn
-            paymentMethodFromText = part;
+        } else if (quantityMatch && quantityMatch.length > 0) {
+          // Đây là số lượng
+          const match = quantityMatch[0];
+          const numberMatch = match.match(/(\d+(?:[.,]\d+)?)/);
+          if (numberMatch) {
+            quantity = parseFloat(numberMatch[1]);
           }
+        } else if (!amountMatch && !quantityMatch && part.length <= 10) {
+          // Có thể là phương thức thanh toán
+          paymentMethodFromText = part;
         }
       }
     }
@@ -361,6 +372,12 @@ async function sendToChannel(expenseData, username, imageUrl = '') {
     message += `${expenseData.emoji} **${expenseData.category}**\n`;
     message += `📝 ${expenseData.description}\n`;
     message += `💰 ${expenseData.amount.toLocaleString('vi-VN')} ₫\n`;
+
+    // Hiển thị số lượng nếu khác 1
+    if (expenseData.quantity && expenseData.quantity !== 1) {
+      message += `📊 Số lượng: ${expenseData.quantity}\n`;
+    }
+
     message += `💳 ${expenseData.paymentMethod}\n`;
     message += `📅 ${dateStr}\n`;
     message += `👤 ${username}`;
@@ -470,7 +487,7 @@ bot.start((ctx) => {
 
 // Xử lý lệnh /help
 bot.help((ctx) => {
-  ctx.reply(`📖 HƯỚNG DẪN SỬ DỤNG:\n\n1. Format cơ bản:\n"Ăn sáng 50k tm"\n"Xăng xe 500k tk"\n\n2. Format có dấu gạch ngang:\n"Mô tả - Số tiền - Phương thức"\n"Thanh toán sân pickleball - 2tr - tk"\n\n3. Thu nhập/Hoàn tiền:\n"Lương tháng 15 triệu tk"\n"Hoàn 200k tm"\n\n4. Hỗ trợ ngày tháng:\n"Ăn trưa tháng 6 - 50k - tm"\n"Mua đồ ngày 15 - 200k - tk"\n"Cafe 10/6 - 30k - tm"\n\n5. Gửi ảnh hóa đơn kèm chú thích\n\n💳 Phương thức thanh toán:\n• tk = Chuyển khoản\n• tm = Tiền mặt\n\n💰 Đơn vị tiền tệ:\n• k = nghìn (100k = 100,000)\n• tr = triệu (2tr = 2,000,000)\n\n⏰ Nhắc nhở tự động:\n• 12:00 trưa\n• 18:00 tối\n• 22:00 tối\n\n📋 Lệnh khác:\n/reminder_on - Bật nhắc nhở\n/reminder_off - Tắt nhắc nhở\n/categories - Xem danh mục`);
+  ctx.reply(`📖 HƯỚNG DẪN SỬ DỤNG:\n\n1. Format cơ bản:\n"Ăn sáng 50k tm"\n"Xăng xe 500k tk"\n\n2. Format có dấu gạch ngang:\n"Mô tả - Số tiền - Phương thức"\n"Thanh toán sân pickleball - 2tr - tk"\n\n3. Format với số lượng:\n"Đổ xăng - 1tr - 70L - tk"\n"Mua nước - 50k - 5 chai - tm"\n\n4. Thu nhập/Hoàn tiền:\n"Lương tháng 15 triệu tk"\n"Hoàn 200k tm"\n\n5. Hỗ trợ ngày tháng:\n"Ăn trưa tháng 6 - 50k - tm"\n"Mua đồ ngày 15 - 200k - tk"\n"Cafe 10/6 - 30k - tm"\n\n6. Gửi ảnh hóa đơn kèm chú thích\n\n💳 Phương thức thanh toán:\n• tk/ck = Chuyển khoản\n• tm = Tiền mặt\n\n💰 Đơn vị tiền tệ:\n• k = nghìn (100k = 100,000)\n• tr = triệu (2tr = 2,000,000)\n\n📊 Đơn vị số lượng:\n• L, lít, kg, g, cái, chiếc, ly, chai, hộp, gói, túi, m, cm, km\n\n⏰ Nhắc nhở tự động:\n• 12:00 trưa\n• 18:00 tối\n• 22:00 tối\n\n📋 Lệnh khác:\n/reminder_on - Bật nhắc nhở\n/reminder_off - Tắt nhắc nhở\n/categories - Xem danh mục\n/channel_test - Test kết nối Channel`);
 });
 
 // Xử lý lệnh /categories
@@ -526,7 +543,14 @@ bot.on('text', async (ctx) => {
     return ctx.reply('❌ Không nhận diện được số tiền!\n\n💡 Ví dụ: "Phở bò 55k tm" hoặc "Ứng 5 triệu tk"');
   }
 
-  let confirmMsg = `✅ THÔNG TIN GIAO DỊCH:\n\n${expense.emoji} ${expense.category}\n📝 ${expense.description}\n💰 ${expense.amount.toLocaleString('vi-VN')} ₫\n💳 ${expense.paymentMethod}`;
+  let confirmMsg = `✅ THÔNG TIN GIAO DỊCH:\n\n${expense.emoji} ${expense.category}\n📝 ${expense.description}\n💰 ${expense.amount.toLocaleString('vi-VN')} ₫`;
+
+  // Hiển thị số lượng nếu khác 1
+  if (expense.quantity && expense.quantity !== 1) {
+    confirmMsg += `\n📊 Số lượng: ${expense.quantity}`;
+  }
+
+  confirmMsg += `\n💳 ${expense.paymentMethod}`;
 
   // Hiển thị ngày nếu khác ngày hiện tại
   if (expense.customDate) {
@@ -595,7 +619,14 @@ bot.on('photo', async (ctx) => {
     
     await pipeline(response.data, fs.createWriteStream(tempFilePath));
     
-    let confirmMsg = `✅ THÔNG TIN TỪ ẢNH:\n\n${expense.emoji} ${expense.category}\n📝 ${expense.description}\n💰 ${expense.amount.toLocaleString('vi-VN')} ₫\n💳 ${expense.paymentMethod}`;
+    let confirmMsg = `✅ THÔNG TIN TỪ ẢNH:\n\n${expense.emoji} ${expense.category}\n📝 ${expense.description}\n💰 ${expense.amount.toLocaleString('vi-VN')} ₫`;
+
+    // Hiển thị số lượng nếu khác 1
+    if (expense.quantity && expense.quantity !== 1) {
+      confirmMsg += `\n📊 Số lượng: ${expense.quantity}`;
+    }
+
+    confirmMsg += `\n💳 ${expense.paymentMethod}`;
 
     // Hiển thị ngày nếu khác ngày hiện tại
     if (expense.customDate) {
