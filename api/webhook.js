@@ -1,15 +1,28 @@
 const { Telegraf } = require('telegraf');
 const { GoogleSpreadsheet } = require('google-spreadsheet');
 const { JWT } = require('google-auth-library');
+const { google } = require('googleapis');
+const axios = require('axios');
+const fs = require('fs');
+const util = require('util');
+const stream = require('stream');
 
+const pipeline = util.promisify(stream.pipeline);
+
+// Xác thực Google APIs
 const serviceAccountAuth = new JWT({
   email: process.env.GOOGLE_CLIENT_EMAIL,
   key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  scopes: [
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/drive'
+  ],
 });
 
 const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID, serviceAccountAuth);
+const drive = google.drive({ version: 'v3', auth: serviceAccountAuth });
 
+// Cấu hình danh mục
 const categories = {
   'chi phí xe ô tô': { emoji: '🚗', subcategories: ['xăng', 'rửa xe', 'vetc', 'sửa chữa', 'vé đỗ xe'] },
   'xăng': { emoji: '⛽', subcategories: ['xăng', 'nhiên liệu'] },
@@ -24,7 +37,8 @@ const categories = {
   'ship đồ': { emoji: '📮', subcategories: ['phí ship', 'giao hàng'] },
   'mua đồ': { emoji: '🛒', subcategories: ['quần áo', 'giày dép', 'mỹ phẩm'] },
   'dịch vụ': { emoji: '🔧', subcategories: ['cắt tóc', 'massage', 'spa'] },
-  'chi phí khác': { emoji: '💰', subcategories: ['khác', 'linh tinh'] }
+  'chi phí khác': { emoji: '💰', subcategories: ['khác', 'linh tinh'] },
+  'thu nhập': { emoji: '💵', subcategories: ['lương', 'thưởng', 'ứng', 'hoàn'] }
 };
 
 const paymentMethods = {
@@ -36,12 +50,34 @@ const paymentMethods = {
   'cash': 'Tiền mặt'
 };
 
+// Hàm phân tích chi tiêu cải tiến
 function parseExpense(text) {
   const input = text.toLowerCase().trim();
-  const amountRegex = /([\d,.]+)[kđvnddngnghìntriệu]?/i;
-  const amountMatch = input.match(amountRegex);
-
+  
+  // Regex cải tiến cho số tiền
+  const amountRegex = /(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?)\s*(k|nghìn|triệu|đ|đồng|d|vnd)?\b/i;
+  const amountMatches = [...input.matchAll(amountRegex)];
+  
   let amount = 0;
+  let amountText = '';
+  
+  // Tìm số tiền hợp lệ nhất (lớn nhất)
+  for (const match of amountMatches) {
+    let value = parseFloat(match[1].replace(/\./g, '').replace(/,/g, '.'));
+    const unit = match[2] ? match[2].toLowerCase() : '';
+    
+    if (unit.includes('k') || unit.includes('nghìn')) value *= 1000;
+    else if (unit.includes('triệu')) value *= 1000000;
+    
+    if (value > amount) {
+      amount = value;
+      amountText = match[0];
+    }
+  }
+  
+  // Loại bỏ số tiền khỏi mô tả
+  const description = text.replace(amountText, '').trim();
+
   let category = 'Chi phí khác';
   let emoji = '💰';
   let subcategory = 'Khác';
@@ -49,69 +85,102 @@ function parseExpense(text) {
   let quantity = 1;
   let type = 'Chi';
 
-  if (amountMatch) {
-    let amountStr = amountMatch[1].replace(/[,\.]/g, '');
-    amount = parseInt(amountStr);
-    if (input.includes('k') || input.includes('nghìn')) {
-      if (amount < 1000) amount *= 1000;
-    } else if (input.includes('triệu')) {
-      amount *= 1000000;
-    }
-  }
-
-  let bestMatch = '';
-  let matchLength = 0;
-
-  for (let cat in categories) {
-    if (input.includes(cat) && cat.length > matchLength) {
-      bestMatch = cat;
-      matchLength = cat.length;
-    }
-  }
-
-  if (bestMatch) {
-    category = bestMatch.charAt(0).toUpperCase() + bestMatch.slice(1);
-    emoji = categories[bestMatch].emoji;
-    for (let sub of categories[bestMatch].subcategories) {
-      if (input.includes(sub)) {
-        subcategory = sub.charAt(0).toUpperCase() + sub.slice(1);
-        break;
-      }
-    }
-  }
-
-  for (let method in paymentMethods) {
-    if (input.includes(method)) {
-      paymentMethod = paymentMethods[method];
-      break;
-    }
-  }
-
-  const quantityRegex = /(\d+)\s*(cái|ly|tô|phần|suất|lần|lít)/i;
-  const quantityMatch = input.match(quantityRegex);
-  if (quantityMatch) {
-    quantity = parseInt(quantityMatch[1]);
-  }
-
-  if (input.includes('thu') || input.includes('nhận') || input.includes('lương') || input.includes('ứng') || input.includes('hoàn')) {
+  // Phát hiện loại giao dịch
+  const incomeKeywords = ['thu', 'nhận', 'lương', 'ứng', 'hoàn'];
+  if (incomeKeywords.some(keyword => input.includes(keyword))) {
     type = 'Thu';
     category = 'Thu nhập';
     emoji = '💵';
+  } else {
+    // Xác định danh mục
+    let bestMatch = '';
+    let matchLength = 0;
+    
+    for (const cat in categories) {
+      if (input.includes(cat) && cat.length > matchLength) {
+        bestMatch = cat;
+        matchLength = cat.length;
+      }
+    }
+    
+    if (bestMatch) {
+      category = bestMatch.charAt(0).toUpperCase() + bestMatch.slice(1);
+      emoji = categories[bestMatch].emoji;
+      
+      // Xác định danh mục con
+      for (const sub of categories[bestMatch].subcategories) {
+        if (input.includes(sub)) {
+          subcategory = sub.charAt(0).toUpperCase() + sub.slice(1);
+          break;
+        }
+      }
+    }
+    
+    // Xác định phương thức thanh toán
+    for (const method in paymentMethods) {
+      if (input.includes(method)) {
+        paymentMethod = paymentMethods[method];
+        break;
+      }
+    }
   }
 
   return {
     amount,
     category,
     emoji,
-    subcategory: subcategory || category,
+    subcategory,
     paymentMethod,
     quantity,
     type,
-    description: text.trim()
+    description
   };
 }
 
-async function saveToSheet(userId, username, expenseData) {
+// Upload ảnh lên Google Drive
+async function uploadImageToDrive(filePath, fileName) {
+  try {
+    const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+    
+    const response = await drive.files.create({
+      requestBody: {
+        name: fileName,
+        mimeType: 'image/jpeg',
+        parents: [folderId],
+      },
+      media: {
+        mimeType: 'image/jpeg',
+        body: fs.createReadStream(filePath),
+      },
+    });
+
+    // Cấp quyền truy cập công khai
+    await drive.permissions.create({
+      fileId: response.data.id,
+      requestBody: {
+        role: 'reader',
+        type: 'anyone',
+      },
+    });
+
+    // Lấy link chia sẻ
+    const result = await drive.files.get({
+      fileId: response.data.id,
+      fields: 'webViewLink',
+    });
+
+    return result.data.webViewLink;
+  } catch (error) {
+    console.error('Lỗi khi upload ảnh:', error);
+    return null;
+  } finally {
+    // Xóa file tạm
+    fs.unlinkSync(filePath);
+  }
+}
+
+// Lưu dữ liệu vào Google Sheets
+async function saveToSheet(userId, username, expenseData, imageUrl = '') {
   try {
     await doc.loadInfo();
     const sheet = doc.sheetsByIndex[0];
@@ -126,7 +195,7 @@ async function saveToSheet(userId, username, expenseData) {
       'Mô tả': expenseData.description,
       'Số tiền': expenseData.amount,
       'Loại': expenseData.type === 'Chi' ? 'expense' : 'income',
-      'Link hóa đơn': '',
+      'Link hóa đơn': imageUrl,
       'Thời gian': isoTime,
       'Danh mục phụ': expenseData.subcategory,
       'Số lượng': expenseData.quantity,
@@ -136,32 +205,36 @@ async function saveToSheet(userId, username, expenseData) {
 
     return true;
   } catch (error) {
-    console.error('Error saving to sheet:', error);
+    console.error('Lỗi khi lưu vào sheet:', error);
     return false;
   }
 }
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
+// Xử lý lệnh /start
 bot.start((ctx) => {
-  ctx.reply(`Hello ${ctx.from.first_name}!\nNhập chi thu đi.`);
+  ctx.reply(`👋 Xin chào ${ctx.from.first_name}!\n\n📝 Nhập chi tiêu theo cú pháp:\n"Mô tả [số tiền] [phương thức]\n\nVí dụ: "Phở bò 55k tm" hoặc "Ứng 5 triệu tk"`);
 });
 
+// Xử lý lệnh /help
 bot.help((ctx) => {
-  ctx.reply(`📖 Hướng dẫn:\n\n🔹 Nhập chi tiêu:\n"Xăng xe 500k tk"\n"Phở bò 55k tm"\n\n💳 Thanh toán:\n• tk = Chuyển khoản\n• tm = Tiền mặt`);
+  ctx.reply(`📖 HƯỚNG DẪN SỬ DỤNG:\n\n1. Nhập chi tiêu:\n"Ăn sáng 50k tm"\n"Xăng xe 500k tk"\n\n2. Nhập thu nhập:\n"Lương tháng 15 triệu tk"\n"Hoàn tiền 200k tm"\n\n3. Gửi ảnh hóa đơn kèm chú thích\n\n💳 Phương thức thanh toán:\n• tk = Chuyển khoản\n• tm = Tiền mặt`);
 });
 
+// Xử lý lệnh /categories
 bot.command('categories', (ctx) => {
-  let message = `📋 Danh mục chi tiêu:
-
-🚗 Chi phí xe ô tô: Xăng, Rửa xe, VETC
-🍽️ Nhà hàng: Ăn sáng, Ăn trưa, Ăn tối, Café
-📦 Giao nhận đồ: Ship đồ, Grab food
-🛒 Mua đồ/Dịch vụ: Mua sắm, Spa, Cắt tóc
-💰 Chi phí khác: Linh tinh`;
+  let message = `📋 DANH MỤC CHI TIÊU:\n\n`;
+  
+  for (const [category, data] of Object.entries(categories)) {
+    message += `${data.emoji} ${category.charAt(0).toUpperCase() + category.slice(1)}:\n`;
+    message += `• ${data.subcategories.join(', ')}\n\n`;
+  }
+  
   ctx.reply(message);
 });
 
+// Xử lý tin nhắn văn bản
 bot.on('text', async (ctx) => {
   const text = ctx.message.text;
   if (text.startsWith('/')) return;
@@ -169,10 +242,10 @@ bot.on('text', async (ctx) => {
   const expense = parseExpense(text);
 
   if (expense.amount <= 0) {
-    return ctx.reply('❌ Không nhận diện được số tiền.\n\n💡 Ví dụ: "Xăng xe 500k tk"');
+    return ctx.reply('❌ Không nhận diện được số tiền!\n\n💡 Ví dụ: "Phở bò 55k tm" hoặc "Ứng 5 triệu tk"');
   }
 
-  const confirmMsg = `✅ Tôi đã nhận thông tin:\n\n${expense.emoji} ${expense.category} \n💰 ${expense.amount.toLocaleString('vi-VN')} ₫\n💳 ${expense.paymentMethod}\n\n⏳ Đang lưu...`;
+  const confirmMsg = `✅ THÔNG TIN GIAO DỊCH:\n\n${expense.emoji} ${expense.category}\n📝 ${expense.description}\n💰 ${expense.amount.toLocaleString('vi-VN')} ₫\n💳 ${expense.paymentMethod}\n\n⏳ Đang lưu...`;
 
   const loadingMsg = await ctx.reply(confirmMsg);
 
@@ -182,44 +255,121 @@ bot.on('text', async (ctx) => {
     expense
   );
 
-  const finalMsg = confirmMsg.replace('⏳ Đang lưu...', '✅ Đã lưu thành công!');
-
   if (saved) {
     await ctx.telegram.editMessageText(
       ctx.chat.id,
       loadingMsg.message_id,
       null,
-      finalMsg
+      confirmMsg.replace('⏳ Đang lưu...', '✅ ĐÃ LƯU THÀNH CÔNG!')
     );
   } else {
     await ctx.telegram.editMessageText(
       ctx.chat.id,
       loadingMsg.message_id,
       null,
-      '❌ Có lỗi khi lưu. Vui lòng thử lại.'
+      '❌ LỖI KHI LƯU DỮ LIỆU!'
     );
   }
 });
 
-bot.catch((err, ctx) => {
-  console.error('Bot error:', err);
-  ctx.reply('❌ Có lỗi xảy ra. Vui lòng thử lại.');
+// Xử lý ảnh có chú thích
+bot.on('photo', async (ctx) => {
+  const caption = ctx.message.caption;
+  
+  if (!caption) {
+    return ctx.reply('⚠️ VUI LÒNG GỬI ẢNH KÈM CHÚ THÍCH!\n\nVí dụ: "Phở bò 55k tm"');
+  }
+
+  const expense = parseExpense(caption);
+  
+  if (expense.amount <= 0) {
+    return ctx.reply('❌ KHÔNG NHẬN DIỆN ĐƯỢC SỐ TIỀN TRONG CHÚ THÍCH!');
+  }
+
+  // Lấy ảnh chất lượng cao nhất
+  const photo = ctx.message.photo[ctx.message.photo.length - 1];
+  const fileId = photo.file_id;
+  
+  // Tải ảnh về
+  const fileUrl = await ctx.telegram.getFileLink(fileId);
+  const tempFilePath = `./temp_${fileId}.jpg`;
+  
+  try {
+    const response = await axios({
+      method: 'GET',
+      url: fileUrl.href,
+      responseType: 'stream'
+    });
+    
+    await pipeline(response.data, fs.createWriteStream(tempFilePath));
+    
+    const confirmMsg = `✅ THÔNG TIN TỪ ẢNH:\n\n${expense.emoji} ${expense.category}\n📝 ${expense.description}\n💰 ${expense.amount.toLocaleString('vi-VN')} ₫\n💳 ${expense.paymentMethod}\n\n⏳ Đang tải ảnh lên Drive...`;
+    const loadingMsg = await ctx.reply(confirmMsg);
+    
+    // Upload ảnh lên Drive
+    const imageUrl = await uploadImageToDrive(tempFilePath, `hoa_don_${Date.now()}.jpg`);
+    
+    if (!imageUrl) {
+      await ctx.telegram.editMessageText(
+        ctx.chat.id,
+        loadingMsg.message_id,
+        null,
+        '❌ LỖI KHI TẢI ẢNH LÊN DRIVE! Đang lưu dữ liệu...'
+      );
+    }
+    
+    // Lưu vào sheet
+    const saved = await saveToSheet(
+      ctx.from.id,
+      ctx.from.username || ctx.from.first_name,
+      expense,
+      imageUrl || ''
+    );
+    
+    if (saved) {
+      let successMsg = '✅ ĐÃ LƯU THÀNH CÔNG!\n';
+      if (imageUrl) successMsg += `📎 Link ảnh: ${imageUrl}`;
+      
+      await ctx.telegram.editMessageText(
+        ctx.chat.id,
+        loadingMsg.message_id,
+        null,
+        successMsg
+      );
+    } else {
+      await ctx.telegram.editMessageText(
+        ctx.chat.id,
+        loadingMsg.message_id,
+        null,
+        '❌ LỖI KHI LƯU DỮ LIỆU VÀO SHEET!'
+      );
+    }
+  } catch (error) {
+    console.error('Lỗi khi xử lý ảnh:', error);
+    ctx.reply('❌ CÓ LỖI XẢY RA KHI XỬ LÝ ẢNH!');
+  }
 });
 
-export default async function handler(req, res) {
+// Xử lý lỗi
+bot.catch((err, ctx) => {
+  console.error('Bot lỗi:', err);
+  ctx.reply('❌ CÓ LỖI HỆ THỐNG! Vui lòng thử lại sau.');
+});
+
+// Xử lý webhook cho Vercel
+module.exports = async (req, res) => {
   try {
-    if (req.method !== 'POST') {
-      return res.status(405).json({
-        error: 'Method not allowed',
-        message: 'Webhook endpoint is working! Use POST method.',
+    if (req.method === 'POST') {
+      await bot.handleUpdate(req.body);
+      res.status(200).json({ status: 'success' });
+    } else {
+      res.status(200).json({
+        message: 'Webhook endpoint is working!',
         timestamp: new Date().toISOString()
       });
     }
-
-    await bot.handleUpdate(req.body);
-    res.status(200).json({ ok: true });
   } catch (error) {
     console.error('Webhook error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
-}
+};
