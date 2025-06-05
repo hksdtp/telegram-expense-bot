@@ -44,6 +44,7 @@ const categories = {
 
 const paymentMethods = {
   'tk': 'Chuyển khoản',
+  'ck': 'Chuyển khoản',
   'chuyển khoản': 'Chuyển khoản',
   'banking': 'Chuyển khoản',
   'tm': 'Tiền mặt',
@@ -212,26 +213,53 @@ function parseExpense(text) {
     category = 'Thu nhập';
     emoji = '💵';
   } else {
-    // Xác định danh mục
+    // Xác định danh mục với ưu tiên cho danh mục cha
     let bestMatch = '';
     let matchLength = 0;
-    
-    for (const cat in categories) {
-      if (input.includes(cat) && cat.length > matchLength) {
-        bestMatch = cat;
-        matchLength = cat.length;
+    let isParentCategory = false;
+
+    // Kiểm tra các từ khóa đặc biệt cho xe ô tô
+    const carKeywords = ['xăng', 'rửa xe', 'vetc', 'range rover', 'xe', 'ô tô'];
+    const hasCarKeyword = carKeywords.some(keyword => input.includes(keyword));
+
+    if (hasCarKeyword) {
+      // Ưu tiên danh mục "chi phí xe ô tô"
+      category = 'Chi phí xe ô tô';
+      emoji = categories['chi phí xe ô tô'].emoji;
+
+      // Xác định danh mục con dựa trên từ khóa
+      if (input.includes('xăng')) {
+        subcategory = 'Xăng';
+      } else if (input.includes('rửa xe')) {
+        subcategory = 'Rửa xe';
+      } else if (input.includes('vetc')) {
+        subcategory = 'Vetc';
+      } else if (input.includes('sửa chữa') || input.includes('sửa')) {
+        subcategory = 'Sửa chữa';
+      } else if (input.includes('đỗ xe') || input.includes('vé đỗ')) {
+        subcategory = 'Vé đỗ xe';
+      } else {
+        subcategory = 'Khác';
       }
-    }
-    
-    if (bestMatch) {
-      category = bestMatch.charAt(0).toUpperCase() + bestMatch.slice(1);
-      emoji = categories[bestMatch].emoji;
-      
-      // Xác định danh mục con
-      for (const sub of categories[bestMatch].subcategories) {
-        if (input.includes(sub)) {
-          subcategory = sub.charAt(0).toUpperCase() + sub.slice(1);
-          break;
+    } else {
+      // Logic phân loại thông thường
+      for (const cat in categories) {
+        if (input.includes(cat) && cat.length > matchLength) {
+          bestMatch = cat;
+          matchLength = cat.length;
+        }
+      }
+
+      if (bestMatch) {
+        category = bestMatch.charAt(0).toUpperCase() + bestMatch.slice(1);
+        emoji = categories[bestMatch].emoji;
+
+        // Xác định danh mục con
+        for (const sub of categories[bestMatch].subcategories) {
+          if (input.includes(sub)) {
+            subcategory = sub.charAt(0).toUpperCase() + sub.slice(1);
+            break;
+          }
         }
       }
     }
