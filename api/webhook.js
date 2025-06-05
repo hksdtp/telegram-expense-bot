@@ -388,38 +388,51 @@ async function uploadImageToDrive(filePath, fileName) {
   }
 }
 
-// Gửi thông báo lên Channel
-async function sendToChannel(expenseData, username, imageUrl = '') {
-  if (!CHANNEL_ID) return;
+// Gửi thông báo lên Channel/Group
+async function sendToChannelOrGroup(expenseData, username, imageUrl = '') {
+  const targetDate = expenseData.customDate || new Date();
+  const dateStr = targetDate.toLocaleDateString('vi-VN');
 
-  try {
-    const targetDate = expenseData.customDate || new Date();
-    const dateStr = targetDate.toLocaleDateString('vi-VN');
+  let message = `💰 **GIAO DỊCH MỚI**\n\n`;
+  message += `${expenseData.emoji} **${expenseData.category}**\n`;
+  message += `📝 ${expenseData.description}\n`;
+  message += `💰 ${expenseData.amount.toLocaleString('vi-VN')} ₫\n`;
 
-    let message = `💰 **GIAO DỊCH MỚI**\n\n`;
-    message += `${expenseData.emoji} **${expenseData.category}**\n`;
-    message += `📝 ${expenseData.description}\n`;
-    message += `💰 ${expenseData.amount.toLocaleString('vi-VN')} ₫\n`;
+  // Hiển thị số lượng nếu khác 1
+  if (expenseData.quantity && expenseData.quantity !== 1) {
+    message += `📊 Số lượng: ${expenseData.quantity}\n`;
+  }
 
-    // Hiển thị số lượng nếu khác 1
-    if (expenseData.quantity && expenseData.quantity !== 1) {
-      message += `📊 Số lượng: ${expenseData.quantity}\n`;
+  message += `💳 ${expenseData.paymentMethod}\n`;
+  message += `📅 ${dateStr}\n`;
+  message += `👤 ${username}`;
+
+  if (imageUrl) {
+    message += `\n📎 [Xem hóa đơn](${imageUrl})`;
+  }
+
+  // Gửi lên Channel nếu có
+  if (CHANNEL_ID) {
+    try {
+      await bot.telegram.sendMessage(CHANNEL_ID, message, {
+        parse_mode: 'Markdown',
+        disable_web_page_preview: true
+      });
+    } catch (error) {
+      console.error('Lỗi khi gửi lên Channel:', error);
     }
+  }
 
-    message += `💳 ${expenseData.paymentMethod}\n`;
-    message += `📅 ${dateStr}\n`;
-    message += `👤 ${username}`;
-
-    if (imageUrl) {
-      message += `\n📎 [Xem hóa đơn](${imageUrl})`;
+  // Gửi lên Group nếu có
+  if (GROUP_ID) {
+    try {
+      await bot.telegram.sendMessage(GROUP_ID, message, {
+        parse_mode: 'Markdown',
+        disable_web_page_preview: true
+      });
+    } catch (error) {
+      console.error('Lỗi khi gửi lên Group:', error);
     }
-
-    await bot.telegram.sendMessage(CHANNEL_ID, message, {
-      parse_mode: 'Markdown',
-      disable_web_page_preview: true
-    });
-  } catch (error) {
-    console.error('Lỗi khi gửi lên Channel:', error);
   }
 }
 
@@ -448,8 +461,8 @@ async function saveToSheet(userId, username, expenseData, imageUrl = '') {
       'Ghi chú': `${username} (${userId})`
     });
 
-    // Gửi thông báo lên Channel sau khi lưu thành công
-    await sendToChannel(expenseData, username, imageUrl);
+    // Gửi thông báo lên Channel/Group sau khi lưu thành công
+    await sendToChannelOrGroup(expenseData, username, imageUrl);
 
     return true;
   } catch (error) {
@@ -465,6 +478,9 @@ const reminderUsers = new Set();
 
 // Channel ID để gửi thông báo (thêm vào environment variables)
 const CHANNEL_ID = process.env.CHANNEL_ID;
+
+// Group ID để gửi thông báo (thêm vào environment variables)
+const GROUP_ID = process.env.GROUP_ID;
 
 // Hàm gửi nhắc nhở
 async function sendReminder() {
@@ -515,7 +531,7 @@ bot.start((ctx) => {
 
 // Xử lý lệnh /help
 bot.help((ctx) => {
-  ctx.reply(`📖 HƯỚNG DẪN SỬ DỤNG:\n\n1. Format cơ bản:\n"Ăn sáng 50k tm"\n"Xăng xe 500k tk"\n\n2. Format có dấu gạch ngang:\n"Mô tả - Số tiền - Phương thức"\n"Thanh toán sân pickleball - 2tr - tk"\n\n3. Format với số lượng:\n"Đổ xăng - 1tr - 70L - tk"\n"Mua nước - 50k - 5 chai - tm"\n\n4. Thu nhập/Hoàn tiền:\n"Lương tháng 15 triệu tk"\n"Hoàn 200k tm"\n\n5. Hỗ trợ ngày tháng:\n"Ăn trưa tháng 6 - 50k - tm"\n"Mua đồ ngày 15 - 200k - tk"\n"Cafe 10/6 - 30k - tm"\n\n6. Gửi ảnh hóa đơn kèm chú thích\n\n💳 Phương thức thanh toán:\n• tk/ck = Chuyển khoản\n• tm = Tiền mặt\n\n💰 Đơn vị tiền tệ:\n• k = nghìn (100k = 100,000)\n• tr = triệu (2tr = 2,000,000)\n\n📊 Đơn vị số lượng:\n• L, lít, kg, g, cái, chiếc, ly, chai, hộp, gói, túi, m, cm, km\n\n⏰ Nhắc nhở tự động:\n• 12:00 trưa\n• 18:00 tối\n• 22:00 tối\n\n📋 Lệnh khác:\n/reminder_on - Bật nhắc nhở\n/reminder_off - Tắt nhắc nhở\n/categories - Xem danh mục\n/channel_test - Test kết nối Channel`);
+  ctx.reply(`📖 HƯỚNG DẪN SỬ DỤNG:\n\n1. Format cơ bản:\n"Ăn sáng 50k tm"\n"Xăng xe 500k tk"\n\n2. Format có dấu gạch ngang:\n"Mô tả - Số tiền - Phương thức"\n"Thanh toán sân pickleball - 2tr - tk"\n\n3. Format với số lượng:\n"Đổ xăng - 1tr - 70L - tk"\n"Mua nước - 50k - 5 chai - tm"\n\n4. Thu nhập/Hoàn tiền:\n"Lương tháng 15 triệu tk"\n"Hoàn 200k tm"\n\n5. Hỗ trợ ngày tháng:\n"Ăn trưa tháng 6 - 50k - tm"\n"Mua đồ ngày 15 - 200k - tk"\n"Cafe 10/6 - 30k - tm"\n\n6. Gửi ảnh hóa đơn kèm chú thích\n\n💳 Phương thức thanh toán:\n• tk/ck = Chuyển khoản\n• tm = Tiền mặt\n\n💰 Đơn vị tiền tệ:\n• k = nghìn (100k = 100,000)\n• tr = triệu (2tr = 2,000,000)\n\n📊 Đơn vị số lượng:\n• L, lít, kg, g, cái, chiếc, ly, chai, hộp, gói, túi, m, cm, km\n\n⏰ Nhắc nhở tự động:\n• 12:00 trưa\n• 18:00 tối\n• 22:00 tối\n\n📋 Lệnh khác:\n/reminder_on - Bật nhắc nhở\n/reminder_off - Tắt nhắc nhở\n/categories - Xem danh mục\n/channel_test - Test kết nối Channel\n/group_test - Test kết nối Group`);
 });
 
 // Xử lý lệnh /categories
@@ -560,61 +576,90 @@ bot.command('channel_test', async (ctx) => {
   }
 });
 
-// Xử lý tin nhắn văn bản
-bot.on('text', async (ctx) => {
-  const text = ctx.message.text;
-  if (text.startsWith('/')) return;
-
-  const expense = parseExpense(text);
-
-  if (expense.amount <= 0) {
-    return ctx.reply('❌ Không nhận diện được số tiền!\n\n💡 Ví dụ: "Phở bò 55k tm" hoặc "Ứng 5 triệu tk"');
+// Lệnh kiểm tra Group
+bot.command('group_test', async (ctx) => {
+  if (!GROUP_ID) {
+    return ctx.reply('❌ Chưa cấu hình GROUP_ID trong environment variables');
   }
 
-  let confirmMsg = `✅ THÔNG TIN GIAO DỊCH:\n\n${expense.emoji} ${expense.category}\n📝 ${expense.description}\n💰 ${expense.amount.toLocaleString('vi-VN')} ₫`;
-
-  // Hiển thị số lượng nếu khác 1
-  if (expense.quantity && expense.quantity !== 1) {
-    confirmMsg += `\n📊 Số lượng: ${expense.quantity}`;
-  }
-
-  confirmMsg += `\n💳 ${expense.paymentMethod}`;
-
-  // Hiển thị ngày nếu khác ngày hiện tại
-  if (expense.customDate) {
-    const now = new Date();
-    const targetDate = expense.customDate;
-    if (targetDate.toDateString() !== now.toDateString()) {
-      confirmMsg += `\n📅 ${targetDate.toLocaleDateString('vi-VN')}`;
-    }
-  }
-
-  confirmMsg += '\n\n⏳ Đang lưu...';
-
-  const loadingMsg = await ctx.reply(confirmMsg);
-
-  const saved = await saveToSheet(
-    ctx.from.id,
-    ctx.from.username || ctx.from.first_name,
-    expense
-  );
-
-  if (saved) {
-    await ctx.telegram.editMessageText(
-      ctx.chat.id,
-      loadingMsg.message_id,
-      null,
-      confirmMsg.replace('⏳ Đang lưu...', '✅ ĐÃ LƯU THÀNH CÔNG!')
-    );
-  } else {
-    await ctx.telegram.editMessageText(
-      ctx.chat.id,
-      loadingMsg.message_id,
-      null,
-      '❌ LỖI KHI LƯU DỮ LIỆU!'
-    );
+  try {
+    await bot.telegram.sendMessage(GROUP_ID, '🧪 **TEST GROUP**\n\nBot đã kết nối thành công với Group!', {
+      parse_mode: 'Markdown'
+    });
+    ctx.reply('✅ Đã gửi tin nhắn test lên Group thành công!');
+  } catch (error) {
+    console.error('Lỗi test Group:', error);
+    ctx.reply(`❌ Lỗi khi gửi lên Group: ${error.message}`);
   }
 });
+
+// Xử lý tin nhắn trong Group
+bot.on('message', async (ctx) => {
+  // Chỉ xử lý tin nhắn từ Group được cấu hình hoặc private chat
+  const chatId = ctx.chat.id;
+  const isConfiguredGroup = GROUP_ID && chatId.toString() === GROUP_ID;
+  const isPrivateChat = ctx.chat.type === 'private';
+
+  if (!isConfiguredGroup && !isPrivateChat) {
+    return; // Bỏ qua tin nhắn từ group khác
+  }
+
+  // Chỉ xử lý tin nhắn văn bản (không phải lệnh)
+  if (ctx.message.text && !ctx.message.text.startsWith('/')) {
+    const text = ctx.message.text;
+    const expense = parseExpense(text);
+
+    if (expense.amount <= 0) {
+      return ctx.reply('❌ Không nhận diện được số tiền!\n\n💡 Ví dụ: "Phở bò 55k tm" hoặc "Ứng 5 triệu tk"');
+    }
+
+    let confirmMsg = `✅ THÔNG TIN GIAO DỊCH:\n\n${expense.emoji} ${expense.category}\n📝 ${expense.description}\n💰 ${expense.amount.toLocaleString('vi-VN')} ₫`;
+
+    // Hiển thị số lượng nếu khác 1
+    if (expense.quantity && expense.quantity !== 1) {
+      confirmMsg += `\n📊 Số lượng: ${expense.quantity}`;
+    }
+
+    confirmMsg += `\n💳 ${expense.paymentMethod}`;
+
+    // Hiển thị ngày nếu khác ngày hiện tại
+    if (expense.customDate) {
+      const now = new Date();
+      const targetDate = expense.customDate;
+      if (targetDate.toDateString() !== now.toDateString()) {
+        confirmMsg += `\n📅 ${targetDate.toLocaleDateString('vi-VN')}`;
+      }
+    }
+
+    confirmMsg += '\n\n⏳ Đang lưu...';
+
+    const loadingMsg = await ctx.reply(confirmMsg);
+
+    const saved = await saveToSheet(
+      ctx.from.id,
+      ctx.from.username || ctx.from.first_name,
+      expense
+    );
+
+    if (saved) {
+      await ctx.telegram.editMessageText(
+        ctx.chat.id,
+        loadingMsg.message_id,
+        null,
+        confirmMsg.replace('⏳ Đang lưu...', '✅ ĐÃ LƯU THÀNH CÔNG!')
+      );
+    } else {
+      await ctx.telegram.editMessageText(
+        ctx.chat.id,
+        loadingMsg.message_id,
+        null,
+        '❌ LỖI KHI LƯU DỮ LIỆU!'
+      );
+    }
+  }
+});
+
+
 
 // Xử lý ảnh có chú thích
 bot.on('photo', async (ctx) => {
