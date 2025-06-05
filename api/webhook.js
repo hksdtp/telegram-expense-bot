@@ -649,10 +649,12 @@ async function getMonthlyReport(month, year) {
 
     let totalExpense = 0;
     let totalIncome = 0;
+    let cumulativeBalance = 0; // Số dư tích lũy từ đầu
     const categoryStats = {};
     const paymentMethodStats = {};
     let transactionCount = 0;
 
+    // Tính số dư tích lũy từ đầu đến cuối tháng được chọn
     for (const row of rows) {
       const dateStr = row.get('Ngày');
       const amount = parseFloat(row.get('Số tiền')) || 0;
@@ -662,7 +664,19 @@ async function getMonthlyReport(month, year) {
 
       if (dateStr) {
         const [day, month_row, year_row] = dateStr.split('/').map(Number);
+        const rowDate = new Date(year_row, month_row - 1, day);
+        const targetDate = new Date(targetYear, targetMonth - 1, 31); // Cuối tháng target
 
+        // Tính tất cả giao dịch từ đầu đến cuối tháng được chọn
+        if (rowDate <= targetDate) {
+          if (type === 'expense') {
+            cumulativeBalance -= amount;
+          } else if (type === 'income') {
+            cumulativeBalance += amount;
+          }
+        }
+
+        // Thống kê riêng cho tháng được chọn
         if (month_row === targetMonth && year_row === targetYear) {
           transactionCount++;
 
@@ -672,13 +686,13 @@ async function getMonthlyReport(month, year) {
             totalIncome += amount;
           }
 
-          // Thống kê theo danh mục
-          if (category) {
+          // Thống kê theo danh mục (chỉ tính chi tiêu)
+          if (category && type === 'expense') {
             categoryStats[category] = (categoryStats[category] || 0) + amount;
           }
 
-          // Thống kê theo phương thức thanh toán
-          if (paymentMethod) {
+          // Thống kê theo phương thức thanh toán (chỉ tính chi tiêu)
+          if (paymentMethod && type === 'expense') {
             paymentMethodStats[paymentMethod] = (paymentMethodStats[paymentMethod] || 0) + amount;
           }
         }
@@ -690,7 +704,8 @@ async function getMonthlyReport(month, year) {
       year: targetYear,
       totalExpense,
       totalIncome,
-      balance: totalIncome - totalExpense,
+      monthlyBalance: totalIncome - totalExpense, // Số dư trong tháng
+      cumulativeBalance, // Số dư tích lũy từ đầu
       categoryStats,
       paymentMethodStats,
       transactionCount
@@ -729,11 +744,16 @@ bot.command('report', async (ctx) => {
   let message = `📊 **BÁO CÁO CHI TIÊU THÁNG ${report.month}/${report.year}**\n\n`;
 
   // Tổng quan
-  message += `💰 **TỔNG QUAN:**\n`;
+  message += `💰 **TỔNG QUAN THÁNG:**\n`;
   message += `• Chi tiêu: ${report.totalExpense.toLocaleString('vi-VN')} ₫\n`;
   message += `• Thu nhập: ${report.totalIncome.toLocaleString('vi-VN')} ₫\n`;
-  message += `• Số dư: ${report.balance.toLocaleString('vi-VN')} ₫ ${report.balance >= 0 ? '✅' : '❌'}\n`;
+  message += `• Số dư tháng: ${report.monthlyBalance.toLocaleString('vi-VN')} ₫ ${report.monthlyBalance >= 0 ? '✅' : '❌'}\n`;
   message += `• Số giao dịch: ${report.transactionCount}\n\n`;
+
+  // Số dư tích lũy
+  message += `💳 **SỐ DƯ TÍCH LŨY:**\n`;
+  message += `• Tổng số dư: ${report.cumulativeBalance.toLocaleString('vi-VN')} ₫ ${report.cumulativeBalance >= 0 ? '✅' : '❌'}\n`;
+  message += `• (Tính từ đầu đến cuối tháng ${report.month}/${report.year})\n\n`;
 
   // Top 5 danh mục chi tiêu nhiều nhất
   const topCategories = Object.entries(report.categoryStats)
