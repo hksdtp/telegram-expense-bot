@@ -55,7 +55,7 @@ function parseExpense(text) {
   const input = text.toLowerCase().trim();
   
   // Regex cải tiến cho số tiền
-  const amountRegex = /(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?)\s*(k|nghìn|triệu|đ|đồng|d|vnd)?\b/i;
+  const amountRegex = /(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?)\s*(k|nghìn|triệu|đ|đồng|d|vnd)?\b/gi;
   const amountMatches = [...input.matchAll(amountRegex)];
   
   let amount = 0;
