@@ -616,17 +616,27 @@ async function sendTaskReminder() {
 // Hàm kiểm tra và gửi nhắc nhở theo giờ
 function checkAndSendReminder() {
   const now = new Date();
-  const hour = now.getHours();
-  const minute = now.getMinutes();
+
+  // Chuyển đổi sang múi giờ Việt Nam (UTC+7)
+  const vietnamTime = new Date(now.getTime() + (7 * 60 * 60 * 1000));
+  const hour = vietnamTime.getHours();
+  const minute = vietnamTime.getMinutes();
+
+  console.log(`Current Vietnam time: ${vietnamTime.toLocaleString('vi-VN')} - Hour: ${hour}, Minute: ${minute}`);
+  console.log(`Reminder users count: ${reminderUsers.size}`);
 
   if (minute === 0) {
+    console.log(`Checking reminders for hour: ${hour}`);
+
     // Gửi nhắc nhở chi tiêu vào 12:00, 18:00, 22:00
     if (hour === 12 || hour === 18 || hour === 22) {
+      console.log(`Sending expense reminder for hour: ${hour}`);
       sendSmartReminder();
     }
 
     // Gửi nhắc nhở công việc vào 7:00, 8:00, 9:00, 13:00, 18:00
     if (hour === 7 || hour === 8 || hour === 9 || hour === 13 || hour === 18) {
+      console.log(`Sending task reminder for hour: ${hour}`);
       sendTaskReminder();
     }
   }
@@ -634,6 +644,46 @@ function checkAndSendReminder() {
 
 // Thiết lập interval để kiểm tra mỗi phút
 setInterval(checkAndSendReminder, 60000);
+
+// Lệnh test nhắc nhở ngay lập tức
+bot.command('test_reminder', async (ctx) => {
+  const userId = ctx.from.id;
+  reminderUsers.add(userId);
+
+  ctx.reply('🧪 **TEST NHẮC NHỞ**\n\nĐang gửi test nhắc nhở chi tiêu và công việc...');
+
+  // Test nhắc nhở chi tiêu
+  setTimeout(async () => {
+    try {
+      await bot.telegram.sendMessage(userId, '🧪 **TEST NHẮC NHỞ CHI TIÊU**\n\n📝 Đây là test nhắc nhở chi tiêu!\n\n💡 Ví dụ: "Ăn trưa - 50k - tm"');
+    } catch (error) {
+      console.error('Lỗi test nhắc nhở chi tiêu:', error);
+    }
+  }, 1000);
+
+  // Test nhắc nhở công việc
+  setTimeout(async () => {
+    try {
+      const tasks = await getTaskList();
+      let taskMessage = '🧪 **TEST NHẮC NHỞ CÔNG VIỆC**\n\n';
+
+      if (tasks.length === 0) {
+        taskMessage += '📋 Hiện tại không có công việc nào!';
+      } else {
+        taskMessage += `📊 Có ${tasks.length} công việc trong danh sách\n\n`;
+        tasks.slice(0, 3).forEach((task, index) => {
+          taskMessage += `${index + 1}. **${task.name}**\n`;
+          if (task.deadline) taskMessage += `   ⏰ ${task.deadline}\n`;
+          taskMessage += `   📊 ${task.status || 'Chưa xác định'}\n\n`;
+        });
+      }
+
+      await bot.telegram.sendMessage(userId, taskMessage, { parse_mode: 'Markdown' });
+    } catch (error) {
+      console.error('Lỗi test nhắc nhở công việc:', error);
+    }
+  }, 2000);
+});
 
 // Xử lý lệnh /start
 bot.start((ctx) => {
@@ -645,7 +695,7 @@ bot.start((ctx) => {
 
 // Xử lý lệnh /help
 bot.help((ctx) => {
-  ctx.reply(`📖 HƯỚNG DẪN SỬ DỤNG:\n\n🏷️ **TOPIC CHI TIÊU:**\n1. Format cơ bản:\n"Ăn sáng 50k tm"\n"Xăng xe 500k tk"\n\n2. Format có dấu gạch ngang:\n"Mô tả - Số tiền - Phương thức"\n"Thanh toán sân pickleball - 2tr - tk"\n\n3. Format với số lượng:\n"Đổ xăng - 1tr - 70L - tk"\n"Mua nước - 50k - 5 chai - tm"\n\n4. Thu nhập/Hoàn tiền:\n"Lương tháng 15 triệu tk"\n"Hoàn 200k tm"\n\n5. Hỗ trợ ngày tháng:\n"Ăn trưa tháng 6 - 50k - tm"\n"Mua đồ ngày 15 - 200k - tk"\n\n📋 **QUẢN LÝ CÔNG VIỆC:**\n1. Lệnh thêm công việc:\n/addtask Đầu việc - Mô tả - Deadline - Trạng thái - Ghi chú\n\n2. Ví dụ đầy đủ:\n/addtask Chốt xe 16 chỗ - Đã liên hệ nhà xe - 6/6 - Đã hoàn thành - Cần xác nhận giá\n\n3. Ví dụ đơn giản:\n/addtask Chốt xe 16 chỗ - 6/6 - Đang thực hiện\n\n4. Từ khóa nhanh:\n/cv Chốt xe 16 chỗ - Đã liên hệ nhà xe - 6/6 - Đã hoàn thành - Cần xác nhận giá\n\n💳 **Phương thức thanh toán:**\n• tk/ck = Chuyển khoản\n• tm = Tiền mặt\n\n💰 **Đơn vị tiền tệ:**\n• k = nghìn (100k = 100,000)\n• tr = triệu (2tr = 2,000,000)\n\n📊 **Đơn vị số lượng:**\n• L, lít, kg, g, cái, chiếc, ly, chai, hộp, gói, túi, m, cm, km\n\n🎯 **Mức ưu tiên:**\n• Cao, Trung bình, Bình thường, Thấp\n\n⏰ **Nhắc nhở tự động:**\n• 12:00 trưa\n• 18:00 tối\n• 22:00 tối\n\n📋 **Lệnh khác:**\n/menu - Menu quản lý (có nút bấm)\n/tasks - Xem danh sách công việc\n/cv - Thêm công việc nhanh\n/addtask - Thêm công việc\n/reminder_on - Bật nhắc nhở\n/reminder_off - Tắt nhắc nhở\n/categories - Xem danh mục\n/report - Báo cáo chi tiêu tháng\n/getid - Lấy Chat ID\n/channel_test - Test kết nối Channel\n/group_test - Test kết nối Group\n\n⏰ **Nhắc nhở công việc:**\n• 7:00, 8:00, 9:00, 13:00, 18:00`);
+  ctx.reply(`📖 HƯỚNG DẪN SỬ DỤNG:\n\n🏷️ **TOPIC CHI TIÊU:**\n1. Format cơ bản:\n"Ăn sáng 50k tm"\n"Xăng xe 500k tk"\n\n2. Format có dấu gạch ngang:\n"Mô tả - Số tiền - Phương thức"\n"Thanh toán sân pickleball - 2tr - tk"\n\n3. Format với số lượng:\n"Đổ xăng - 1tr - 70L - tk"\n"Mua nước - 50k - 5 chai - tm"\n\n4. Thu nhập/Hoàn tiền:\n"Lương tháng 15 triệu tk"\n"Hoàn 200k tm"\n\n5. Hỗ trợ ngày tháng:\n"Ăn trưa tháng 6 - 50k - tm"\n"Mua đồ ngày 15 - 200k - tk"\n\n📋 **QUẢN LÝ CÔNG VIỆC:**\n1. Lệnh thêm công việc:\n/addtask Đầu việc - Mô tả - Deadline - Trạng thái - Ghi chú\n\n2. Ví dụ đầy đủ:\n/addtask Chốt xe 16 chỗ - Đã liên hệ nhà xe - 6/6 - Đã hoàn thành - Cần xác nhận giá\n\n3. Ví dụ đơn giản:\n/addtask Chốt xe 16 chỗ - 6/6 - Đang thực hiện\n\n4. Từ khóa nhanh:\n/cv Chốt xe 16 chỗ - Đã liên hệ nhà xe - 6/6 - Đã hoàn thành - Cần xác nhận giá\n\n💳 **Phương thức thanh toán:**\n• tk/ck = Chuyển khoản\n• tm = Tiền mặt\n\n💰 **Đơn vị tiền tệ:**\n• k = nghìn (100k = 100,000)\n• tr = triệu (2tr = 2,000,000)\n\n📊 **Đơn vị số lượng:**\n• L, lít, kg, g, cái, chiếc, ly, chai, hộp, gói, túi, m, cm, km\n\n🎯 **Mức ưu tiên:**\n• Cao, Trung bình, Bình thường, Thấp\n\n⏰ **Nhắc nhở tự động:**\n• 12:00 trưa\n• 18:00 tối\n• 22:00 tối\n\n📋 **Lệnh khác:**\n/menu - Menu quản lý (có nút bấm)\n/tasks - Xem danh sách công việc\n/cv - Thêm công việc nhanh\n/addtask - Thêm công việc\n/reminder_on - Bật nhắc nhở\n/reminder_off - Tắt nhắc nhở\n/reminder_status - Kiểm tra trạng thái nhắc nhở\n/test_reminder - Test nhắc nhở ngay\n/categories - Xem danh mục\n/report - Báo cáo chi tiêu tháng\n/getid - Lấy Chat ID\n/channel_test - Test kết nối Channel\n/group_test - Test kết nối Group\n\n⏰ **Nhắc nhở công việc:**\n• 7:00, 8:00, 9:00, 13:00, 18:00`);
 });
 
 // Xử lý lệnh /categories
@@ -671,6 +721,30 @@ bot.command('reminder_off', (ctx) => {
   const userId = ctx.from.id;
   reminderUsers.delete(userId);
   ctx.reply('❌ Đã TẮT nhắc nhở tự động!\n\n💡 Gõ /reminder_on để bật lại');
+});
+
+// Lệnh kiểm tra trạng thái nhắc nhở
+bot.command('reminder_status', (ctx) => {
+  const userId = ctx.from.id;
+  const isRegistered = reminderUsers.has(userId);
+  const now = new Date();
+  const vietnamTime = new Date(now.getTime() + (7 * 60 * 60 * 1000));
+
+  let message = `📊 **TRẠNG THÁI NHẮC NHỞ**\n\n`;
+  message += `👤 **User ID:** ${userId}\n`;
+  message += `🔔 **Trạng thái:** ${isRegistered ? '✅ Đã bật' : '❌ Đã tắt'}\n`;
+  message += `👥 **Tổng users đăng ký:** ${reminderUsers.size}\n`;
+  message += `🕐 **Giờ hiện tại (VN):** ${vietnamTime.toLocaleString('vi-VN')}\n\n`;
+
+  message += `⏰ **Lịch nhắc nhở chi tiêu:**\n`;
+  message += `• 12:00 trưa\n• 18:00 tối\n• 22:00 tối\n\n`;
+
+  message += `📋 **Lịch nhắc nhở công việc:**\n`;
+  message += `• 07:00 sáng\n• 08:00 sáng\n• 09:00 sáng\n• 13:00 trưa\n• 18:00 tối\n\n`;
+
+  message += `🧪 **Test:** Gõ /test_reminder để test ngay`;
+
+  ctx.reply(message, { parse_mode: 'Markdown' });
 });
 
 // Lệnh kiểm tra Channel
