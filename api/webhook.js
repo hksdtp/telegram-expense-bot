@@ -897,11 +897,24 @@ bot.on('message', async (ctx) => {
     const isExpenseTopic = EXPENSE_TOPIC_ID && messageThreadId && messageThreadId.toString() === EXPENSE_TOPIC_ID;
     const isTaskKeyword = /^(#cv:?|!task:?|cv:?|task:?)\s*/i.test(text);
 
+    console.log('Message analysis:');
+    console.log('- Text:', text);
+    console.log('- messageThreadId:', messageThreadId);
+    console.log('- TASK_TOPIC_ID:', TASK_TOPIC_ID);
+    console.log('- EXPENSE_TOPIC_ID:', EXPENSE_TOPIC_ID);
+    console.log('- isTaskTopic:', isTaskTopic);
+    console.log('- isExpenseTopic:', isExpenseTopic);
+    console.log('- isTaskKeyword:', isTaskKeyword);
+
     // Xử lý công việc
     if (isTaskTopic || isTaskKeyword) {
+      console.log('Processing task. isTaskTopic:', isTaskTopic, 'isTaskKeyword:', isTaskKeyword);
       const task = parseTask(text);
 
-      if (!task.name) {
+      console.log('Task parsed:', task);
+
+      if (!task.name || task.name.trim() === '') {
+        console.log('Task name is empty:', task.name);
         return ctx.reply('❌ Không nhận diện được tên công việc!\n\n💡 Ví dụ:\n• "#cv Hoàn thành báo cáo - 15/6 - Cao"\n• "cv: Họp team - Thứ 2 - Bình thường"');
       }
 
