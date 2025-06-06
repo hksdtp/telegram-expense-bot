@@ -650,25 +650,19 @@ bot.command('test_reminder', async (ctx) => {
   const userId = ctx.from.id;
   reminderUsers.add(userId);
 
-  ctx.reply('🧪 **TEST NHẮC NHỞ**\n\nĐang gửi test nhắc nhở chi tiêu và công việc...');
+  const initialMsg = await ctx.reply('🧪 **TEST NHẮC NHỞ**\n\nĐang gửi test nhắc nhở chi tiêu và công việc...');
 
-  // Test nhắc nhở chi tiêu
-  setTimeout(async () => {
-    try {
-      await bot.telegram.sendMessage(userId, '🧪 **TEST NHẮC NHỞ CHI TIÊU**\n\n📝 Đây là test nhắc nhở chi tiêu!\n\n💡 Ví dụ: "Ăn trưa - 50k - tm"');
-    } catch (error) {
-      console.error('Lỗi test nhắc nhở chi tiêu:', error);
-    }
-  }, 1000);
+  try {
+    // Test nhắc nhở chi tiêu
+    await ctx.reply('🧪 **TEST NHẮC NHỞ CHI TIÊU**\n\n📝 Đây là test nhắc nhở chi tiêu!\n\n💡 Ví dụ: "Ăn trưa - 50k - tm"');
 
-  // Test nhắc nhở công việc
-  setTimeout(async () => {
+    // Test nhắc nhở công việc
     try {
       const tasks = await getTaskList();
       let taskMessage = '🧪 **TEST NHẮC NHỞ CÔNG VIỆC**\n\n';
 
       if (tasks.length === 0) {
-        taskMessage += '📋 Hiện tại không có công việc nào!';
+        taskMessage += '📋 Hiện tại không có công việc nào!\n\n💡 Gõ /cv để tạo công việc mới';
       } else {
         taskMessage += `📊 Có ${tasks.length} công việc trong danh sách\n\n`;
         tasks.slice(0, 3).forEach((task, index) => {
@@ -676,13 +670,37 @@ bot.command('test_reminder', async (ctx) => {
           if (task.deadline) taskMessage += `   ⏰ ${task.deadline}\n`;
           taskMessage += `   📊 ${task.status || 'Chưa xác định'}\n\n`;
         });
+
+        if (tasks.length > 3) {
+          taskMessage += `📋 Và ${tasks.length - 3} công việc khác...\n\n`;
+        }
+
+        taskMessage += `💡 Gõ /tasks để xem danh sách đầy đủ`;
       }
 
-      await bot.telegram.sendMessage(userId, taskMessage, { parse_mode: 'Markdown' });
-    } catch (error) {
-      console.error('Lỗi test nhắc nhở công việc:', error);
+      await ctx.reply(taskMessage, { parse_mode: 'Markdown' });
+    } catch (taskError) {
+      console.error('Lỗi test nhắc nhở công việc:', taskError);
+      await ctx.reply('❌ **LỖI TEST CÔNG VIỆC**\n\nKhông thể truy cập Google Sheets!\n\n🔧 Kiểm tra:\n• TASK_SHEET_ID có đúng không?\n• Quyền truy cập Google Sheets\n• Kết nối internet');
     }
-  }, 2000);
+
+    // Cập nhật tin nhắn đầu
+    await ctx.telegram.editMessageText(
+      ctx.chat.id,
+      initialMsg.message_id,
+      null,
+      '✅ **TEST NHẮC NHỞ HOÀN THÀNH**\n\nĐã gửi test nhắc nhở chi tiêu và công việc!'
+    );
+
+  } catch (error) {
+    console.error('Lỗi test nhắc nhở:', error);
+    await ctx.telegram.editMessageText(
+      ctx.chat.id,
+      initialMsg.message_id,
+      null,
+      '❌ **LỖI TEST NHẮC NHỞ**\n\nCó lỗi xảy ra khi test!'
+    );
+  }
 });
 
 // Xử lý lệnh /start
@@ -721,6 +739,32 @@ bot.command('reminder_off', (ctx) => {
   const userId = ctx.from.id;
   reminderUsers.delete(userId);
   ctx.reply('❌ Đã TẮT nhắc nhở tự động!\n\n💡 Gõ /reminder_on để bật lại');
+});
+
+// Lệnh test đơn giản
+bot.command('test_simple', async (ctx) => {
+  const userId = ctx.from.id;
+  const now = new Date();
+  const vietnamTime = new Date(now.getTime() + (7 * 60 * 60 * 1000));
+
+  let message = '🧪 **TEST ĐỠN GIẢN**\n\n';
+  message += `🕐 **Giờ hiện tại (VN):** ${vietnamTime.toLocaleString('vi-VN')}\n`;
+  message += `👤 **User ID:** ${userId}\n`;
+  message += `🔔 **Đã đăng ký nhắc nhở:** ${reminderUsers.has(userId) ? 'Có' : 'Không'}\n`;
+  message += `👥 **Tổng users:** ${reminderUsers.size}\n\n`;
+
+  // Test gửi nhắc nhở chi tiêu
+  message += '📝 **Test nhắc nhở chi tiêu:**\n';
+  message += 'Đừng quên ghi chi tiêu hôm nay!\n\n';
+
+  // Test environment variables
+  message += '🔧 **Environment Variables:**\n';
+  message += `• TASK_SHEET_ID: ${TASK_SHEET_ID ? 'Có' : 'Không'}\n`;
+  message += `• GOOGLE_SHEET_ID: ${process.env.GOOGLE_SHEET_ID ? 'Có' : 'Không'}\n\n`;
+
+  message += '✅ Test hoàn thành!';
+
+  ctx.reply(message, { parse_mode: 'Markdown' });
 });
 
 // Lệnh kiểm tra trạng thái nhắc nhở
