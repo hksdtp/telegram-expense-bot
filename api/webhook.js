@@ -474,7 +474,9 @@ async function saveToSheet(userId, username, expenseData, imageUrl = '') {
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
 // Danh sách user ID để nhắc nhở (có thể lưu vào database sau)
-const reminderUsers = new Set();
+const reminderUsers = new Set([
+  5586005296 // User ID của Ninh - hardcode để đảm bảo hoạt động
+]);
 
 // Channel ID để gửi thông báo (thêm vào environment variables)
 const CHANNEL_ID = process.env.CHANNEL_ID;
@@ -739,6 +741,33 @@ bot.command('reminder_off', (ctx) => {
   const userId = ctx.from.id;
   reminderUsers.delete(userId);
   ctx.reply('❌ Đã TẮT nhắc nhở tự động!\n\n💡 Gõ /reminder_on để bật lại');
+});
+
+// Lệnh test cron ngay lập tức
+bot.command('test_cron', async (ctx) => {
+  try {
+    const response = await fetch(`${process.env.VERCEL_URL || 'https://telegram-expense-bot.vercel.app'}/api/cron`);
+    const data = await response.json();
+
+    let message = '🧪 **TEST CRON ENDPOINT**\n\n';
+    message += `✅ **Status:** ${data.success ? 'Success' : 'Failed'}\n`;
+    message += `🕐 **Time:** ${data.time}\n`;
+    message += `⏰ **Hour:** ${data.hour}\n`;
+    message += `📋 **Actions:** ${data.actions?.length || 0}\n`;
+
+    if (data.actions && data.actions.length > 0) {
+      message += `\n**Executed:**\n`;
+      data.actions.forEach(action => {
+        message += `• ${action}\n`;
+      });
+    }
+
+    message += `\n💬 **Message:** ${data.message}`;
+
+    ctx.reply(message, { parse_mode: 'Markdown' });
+  } catch (error) {
+    ctx.reply(`❌ **LỖI TEST CRON**\n\nKhông thể gọi endpoint cron:\n${error.message}`);
+  }
 });
 
 // Lệnh test đơn giản
