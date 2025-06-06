@@ -816,8 +816,11 @@ bot.command('report', async (ctx) => {
 
 // Hàm xử lý công việc
 async function parseTask(text) {
-  // Loại bỏ prefix công việc
-  const cleanText = text.replace(/^(#cv|!task|cv:|task:)\s*/i, '').trim();
+  // Loại bỏ prefix công việc (cải tiến regex để xử lý dấu hai chấm)
+  const cleanText = text.replace(/^(#cv:?|!task:?|cv:?|task:?)\s*/i, '').trim();
+
+  console.log('Original text:', text);
+  console.log('Clean text:', cleanText);
 
   // Phân tích công việc theo format: "Tên công việc - Deadline - Ưu tiên"
   const parts = cleanText.split(' - ').map(part => part.trim());
@@ -833,6 +836,8 @@ async function parseTask(text) {
       priority = parts[2];
     }
   }
+
+  console.log('Parsed task:', { taskName, deadline, priority });
 
   return {
     name: taskName,
@@ -890,7 +895,7 @@ bot.on('message', async (ctx) => {
     // Kiểm tra xem có phải topic công việc không
     const isTaskTopic = TASK_TOPIC_ID && messageThreadId && messageThreadId.toString() === TASK_TOPIC_ID;
     const isExpenseTopic = EXPENSE_TOPIC_ID && messageThreadId && messageThreadId.toString() === EXPENSE_TOPIC_ID;
-    const isTaskKeyword = /^(#cv|!task|cv:|task:)\s+/i.test(text);
+    const isTaskKeyword = /^(#cv:?|!task:?|cv:?|task:?)\s*/i.test(text);
 
     // Xử lý công việc
     if (isTaskTopic || isTaskKeyword) {
