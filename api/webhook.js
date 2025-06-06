@@ -732,7 +732,7 @@ bot.command('categories', (ctx) => {
 bot.command('reminder_on', (ctx) => {
   const userId = ctx.from.id;
   reminderUsers.add(userId);
-  ctx.reply('✅ Đã BẬT nhắc nhở tự động!\n\n⏰ Bot sẽ nhắc bạn ghi chi tiêu vào:\n• 12:00 trưa\n• 18:00 tối\n• 22:00 tối');
+  ctx.reply('✅ Đã BẬT nhắc nhở tự động!\n\n💰 **Nhắc nhở chi tiêu:**\n• 12:00 trưa\n• 18:00 tối\n• 22:00 tối\n\n📋 **Nhắc nhở công việc:**\n• 07:00 sáng\n• 08:00 sáng\n• 09:00 sáng\n• 13:00 trưa\n• 18:00 tối\n\n💡 Gõ /reminder_status để kiểm tra trạng thái', { parse_mode: 'Markdown' });
 });
 
 bot.command('reminder_off', (ctx) => {
