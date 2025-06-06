@@ -489,6 +489,40 @@ const TASK_TOPIC_ID = process.env.TASK_TOPIC_ID; // Topic Nhắc công việc
 // Google Sheets ID cho công việc (riêng biệt với chi tiêu)
 const TASK_SHEET_ID = process.env.TASK_SHEET_ID;
 
+// Hàm lấy danh sách công việc từ Google Sheets
+async function getTaskList() {
+  try {
+    const taskSheetId = TASK_SHEET_ID || process.env.GOOGLE_SHEET_ID;
+    const taskDoc = new GoogleSpreadsheet(taskSheetId, serviceAccountAuth);
+
+    await taskDoc.loadInfo();
+    let sheet = taskDoc.sheetsByTitle['Ninh'] || taskDoc.sheetsByIndex[0];
+    const rows = await sheet.getRows();
+
+    const tasks = [];
+    for (const row of rows) {
+      const task = {
+        stt: row.get('STT'),
+        name: row.get('Đầu Việc'),
+        description: row.get('Mô Tả Chi Tiết'),
+        deadline: row.get('Thời Gian Kết Thúc (Deadline)'),
+        progress: row.get('Tiến Độ (%)') || 0,
+        status: row.get('Trạng Thái'),
+        notes: row.get('Ghi Chú / Vướng Mắc:')
+      };
+
+      if (task.name && task.name.trim() !== '') {
+        tasks.push(task);
+      }
+    }
+
+    return tasks;
+  } catch (error) {
+    console.error('Lỗi khi lấy danh sách công việc:', error);
+    return [];
+  }
+}
+
 // Hàm gửi nhắc nhở thông minh
 async function sendSmartReminder() {
   const now = new Date();
@@ -523,15 +557,78 @@ async function sendSmartReminder() {
   }
 }
 
+// Hàm gửi nhắc nhở công việc
+async function sendTaskReminder() {
+  const now = new Date();
+  const hour = now.getHours();
+  const timeStr = now.toLocaleTimeString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Ho_Chi_Minh'
+  });
+
+  const tasks = await getTaskList();
+
+  if (tasks.length === 0) {
+    return; // Không có công việc thì không gửi nhắc nhở
+  }
+
+  let taskMessage = `📋 **NHẮC NHỞ CÔNG VIỆC** (${timeStr})\n\n`;
+
+  // Lọc công việc chưa hoàn thành
+  const pendingTasks = tasks.filter(task =>
+    task.status && !task.status.toLowerCase().includes('hoàn thành') && !task.status.toLowerCase().includes('hủy')
+  );
+
+  if (pendingTasks.length === 0) {
+    taskMessage += `🎉 **Tuyệt vời!** Tất cả công việc đã hoàn thành!\n\n💪 Hãy tiếp tục duy trì hiệu suất cao nhé!`;
+  } else {
+    taskMessage += `📊 **Tổng quan:** ${pendingTasks.length} công việc đang thực hiện\n\n`;
+
+    pendingTasks.slice(0, 5).forEach((task, index) => {
+      taskMessage += `${index + 1}. **${task.name}**\n`;
+      if (task.deadline) taskMessage += `   ⏰ Deadline: ${task.deadline}\n`;
+      taskMessage += `   📊 Trạng thái: ${task.status}\n`;
+      if (task.progress) taskMessage += `   📈 Tiến độ: ${task.progress}%\n`;
+      if (task.notes) taskMessage += `   📝 Vướng mắc: ${task.notes}\n`;
+      taskMessage += '\n';
+    });
+
+    if (pendingTasks.length > 5) {
+      taskMessage += `📋 Và ${pendingTasks.length - 5} công việc khác...\n\n`;
+    }
+
+    taskMessage += `💡 Gõ /tasks để xem danh sách đầy đủ`;
+  }
+
+  for (const userId of reminderUsers) {
+    try {
+      await bot.telegram.sendMessage(userId, taskMessage, { parse_mode: 'Markdown' });
+    } catch (error) {
+      console.error(`Lỗi gửi nhắc nhở công việc cho user ${userId}:`, error);
+      if (error.code === 403) {
+        reminderUsers.delete(userId);
+      }
+    }
+  }
+}
+
 // Hàm kiểm tra và gửi nhắc nhở theo giờ
 function checkAndSendReminder() {
   const now = new Date();
   const hour = now.getHours();
   const minute = now.getMinutes();
 
-  // Gửi nhắc nhở vào 12:00, 18:00, 22:00
-  if (minute === 0 && (hour === 12 || hour === 18 || hour === 22)) {
-    sendSmartReminder();
+  if (minute === 0) {
+    // Gửi nhắc nhở chi tiêu vào 12:00, 18:00, 22:00
+    if (hour === 12 || hour === 18 || hour === 22) {
+      sendSmartReminder();
+    }
+
+    // Gửi nhắc nhở công việc vào 7:00, 8:00, 9:00, 13:00, 18:00
+    if (hour === 7 || hour === 8 || hour === 9 || hour === 13 || hour === 18) {
+      sendTaskReminder();
+    }
   }
 }
 
@@ -548,7 +645,7 @@ bot.start((ctx) => {
 
 // Xử lý lệnh /help
 bot.help((ctx) => {
-  ctx.reply(`📖 HƯỚNG DẪN SỬ DỤNG:\n\n🏷️ **TOPIC CHI TIÊU:**\n1. Format cơ bản:\n"Ăn sáng 50k tm"\n"Xăng xe 500k tk"\n\n2. Format có dấu gạch ngang:\n"Mô tả - Số tiền - Phương thức"\n"Thanh toán sân pickleball - 2tr - tk"\n\n3. Format với số lượng:\n"Đổ xăng - 1tr - 70L - tk"\n"Mua nước - 50k - 5 chai - tm"\n\n4. Thu nhập/Hoàn tiền:\n"Lương tháng 15 triệu tk"\n"Hoàn 200k tm"\n\n5. Hỗ trợ ngày tháng:\n"Ăn trưa tháng 6 - 50k - tm"\n"Mua đồ ngày 15 - 200k - tk"\n\n📋 **QUẢN LÝ CÔNG VIỆC:**\n1. Lệnh thêm công việc:\n/addtask Đầu việc - Mô tả - Deadline - Trạng thái - Ghi chú\n\n2. Ví dụ đầy đủ:\n/addtask Chốt xe 16 chỗ - Đã liên hệ nhà xe - 6/6 - Đã hoàn thành - Cần xác nhận giá\n\n3. Ví dụ đơn giản:\n/addtask Chốt xe 16 chỗ - 6/6 - Đang thực hiện\n\n4. Từ khóa nhanh:\n/cv Chốt xe 16 chỗ - Đã liên hệ nhà xe - 6/6 - Đã hoàn thành - Cần xác nhận giá\n\n💳 **Phương thức thanh toán:**\n• tk/ck = Chuyển khoản\n• tm = Tiền mặt\n\n💰 **Đơn vị tiền tệ:**\n• k = nghìn (100k = 100,000)\n• tr = triệu (2tr = 2,000,000)\n\n📊 **Đơn vị số lượng:**\n• L, lít, kg, g, cái, chiếc, ly, chai, hộp, gói, túi, m, cm, km\n\n🎯 **Mức ưu tiên:**\n• Cao, Trung bình, Bình thường, Thấp\n\n⏰ **Nhắc nhở tự động:**\n• 12:00 trưa\n• 18:00 tối\n• 22:00 tối\n\n📋 **Lệnh khác:**\n/reminder_on - Bật nhắc nhở\n/reminder_off - Tắt nhắc nhở\n/categories - Xem danh mục\n/report - Báo cáo chi tiêu tháng\n/addtask - Thêm công việc\n/getid - Lấy Chat ID\n/channel_test - Test kết nối Channel\n/group_test - Test kết nối Group`);
+  ctx.reply(`📖 HƯỚNG DẪN SỬ DỤNG:\n\n🏷️ **TOPIC CHI TIÊU:**\n1. Format cơ bản:\n"Ăn sáng 50k tm"\n"Xăng xe 500k tk"\n\n2. Format có dấu gạch ngang:\n"Mô tả - Số tiền - Phương thức"\n"Thanh toán sân pickleball - 2tr - tk"\n\n3. Format với số lượng:\n"Đổ xăng - 1tr - 70L - tk"\n"Mua nước - 50k - 5 chai - tm"\n\n4. Thu nhập/Hoàn tiền:\n"Lương tháng 15 triệu tk"\n"Hoàn 200k tm"\n\n5. Hỗ trợ ngày tháng:\n"Ăn trưa tháng 6 - 50k - tm"\n"Mua đồ ngày 15 - 200k - tk"\n\n📋 **QUẢN LÝ CÔNG VIỆC:**\n1. Lệnh thêm công việc:\n/addtask Đầu việc - Mô tả - Deadline - Trạng thái - Ghi chú\n\n2. Ví dụ đầy đủ:\n/addtask Chốt xe 16 chỗ - Đã liên hệ nhà xe - 6/6 - Đã hoàn thành - Cần xác nhận giá\n\n3. Ví dụ đơn giản:\n/addtask Chốt xe 16 chỗ - 6/6 - Đang thực hiện\n\n4. Từ khóa nhanh:\n/cv Chốt xe 16 chỗ - Đã liên hệ nhà xe - 6/6 - Đã hoàn thành - Cần xác nhận giá\n\n💳 **Phương thức thanh toán:**\n• tk/ck = Chuyển khoản\n• tm = Tiền mặt\n\n💰 **Đơn vị tiền tệ:**\n• k = nghìn (100k = 100,000)\n• tr = triệu (2tr = 2,000,000)\n\n📊 **Đơn vị số lượng:**\n• L, lít, kg, g, cái, chiếc, ly, chai, hộp, gói, túi, m, cm, km\n\n🎯 **Mức ưu tiên:**\n• Cao, Trung bình, Bình thường, Thấp\n\n⏰ **Nhắc nhở tự động:**\n• 12:00 trưa\n• 18:00 tối\n• 22:00 tối\n\n📋 **Lệnh khác:**\n/menu - Menu quản lý (có nút bấm)\n/tasks - Xem danh sách công việc\n/cv - Thêm công việc nhanh\n/addtask - Thêm công việc\n/reminder_on - Bật nhắc nhở\n/reminder_off - Tắt nhắc nhở\n/categories - Xem danh mục\n/report - Báo cáo chi tiêu tháng\n/getid - Lấy Chat ID\n/channel_test - Test kết nối Channel\n/group_test - Test kết nối Group\n\n⏰ **Nhắc nhở công việc:**\n• 7:00, 8:00, 9:00, 13:00, 18:00`);
 });
 
 // Xử lý lệnh /categories
@@ -611,6 +708,58 @@ bot.command('group_test', async (ctx) => {
 });
 
 // Lệnh thêm công việc
+// Lệnh /cv (alias cho addtask)
+bot.command('cv', async (ctx) => {
+  const args = ctx.message.text.replace('/cv', '').trim();
+
+  if (!args) {
+    return ctx.reply('❌ Vui lòng nhập thông tin công việc!\n\n💡 **Format đầy đủ:**\n/cv Đầu việc - Mô tả chi tiết - Deadline - Trạng thái - Ghi chú\n\n💡 **Ví dụ:**\n/cv Chốt xe 16 chỗ - Đã liên hệ nhà xe, đã gửi thông tin - 6/6 - Đã hoàn thành - Cần xác nhận giá\n\n💡 **Format đơn giản:**\n/cv Chốt xe 16 chỗ - 6/6 - Đang thực hiện');
+  }
+
+  const task = parseTask(args);
+
+  if (!task.name || task.name.trim() === '') {
+    return ctx.reply('❌ Không nhận diện được tên công việc!\n\n💡 **Format đầy đủ:**\n/cv Đầu việc - Mô tả chi tiết - Deadline - Trạng thái - Ghi chú\n\n💡 **Ví dụ:**\n/cv Chốt xe 16 chỗ - Đã liên hệ nhà xe, đã gửi thông tin - 6/6 - Đã hoàn thành - Cần xác nhận giá');
+  }
+
+  // Hiển thị thông tin lưu trữ
+  const taskSheetId = TASK_SHEET_ID || process.env.GOOGLE_SHEET_ID;
+  const storageInfo = TASK_SHEET_ID ? 'Sheet Ninh (riêng cho công việc)' : 'Sheet chung với chi tiêu';
+
+  let confirmMsg = `✅ THÔNG TIN CÔNG VIỆC:\n\n📋 **Đầu việc:** ${task.name}`;
+  if (task.description) confirmMsg += `\n📝 **Mô tả:** ${task.description}`;
+  if (task.deadline) confirmMsg += `\n⏰ **Deadline:** ${task.deadline}`;
+  confirmMsg += `\n📊 **Trạng thái:** ${task.status}`;
+  confirmMsg += `\n📅 **Bắt đầu:** ${task.startTime}`;
+  if (task.notes) confirmMsg += `\n📝 **Ghi chú:** ${task.notes}`;
+  confirmMsg += `\n💾 **Lưu vào:** ${storageInfo}`;
+  confirmMsg += '\n\n⏳ Đang lưu...';
+
+  const loadingMsg = await ctx.reply(confirmMsg);
+
+  const saved = await saveTaskToSheet(
+    ctx.from.id,
+    ctx.from.username || ctx.from.first_name,
+    task
+  );
+
+  if (saved) {
+    await ctx.telegram.editMessageText(
+      ctx.chat.id,
+      loadingMsg.message_id,
+      null,
+      confirmMsg.replace('⏳ Đang lưu...', '✅ ĐÃ LƯU THÀNH CÔNG!')
+    );
+  } else {
+    await ctx.telegram.editMessageText(
+      ctx.chat.id,
+      loadingMsg.message_id,
+      null,
+      '❌ LỖI KHI LƯU CÔNG VIỆC!'
+    );
+  }
+});
+
 bot.command('addtask', async (ctx) => {
   const args = ctx.message.text.replace('/addtask', '').trim();
 
@@ -659,6 +808,122 @@ bot.command('addtask', async (ctx) => {
       null,
       '❌ LỖI KHI LƯU CÔNG VIỆC!'
     );
+  }
+});
+
+// Lệnh xem danh sách công việc
+bot.command('tasks', async (ctx) => {
+  const loadingMsg = await ctx.reply('📋 Đang tải danh sách công việc...');
+
+  const tasks = await getTaskList();
+
+  if (tasks.length === 0) {
+    return ctx.telegram.editMessageText(
+      ctx.chat.id,
+      loadingMsg.message_id,
+      null,
+      '📋 **DANH SÁCH CÔNG VIỆC**\n\n🎉 Hiện tại không có công việc nào!\n\n💡 Gõ /menu để tạo công việc mới'
+    );
+  }
+
+  let message = `📋 **DANH SÁCH CÔNG VIỆC** (${tasks.length} việc)\n\n`;
+
+  tasks.forEach((task, index) => {
+    const statusEmoji = task.status && task.status.toLowerCase().includes('hoàn thành') ? '✅' :
+                       task.status && task.status.toLowerCase().includes('đang') ? '🔄' : '⏳';
+
+    message += `${statusEmoji} **${task.name}**\n`;
+    if (task.deadline) message += `   ⏰ ${task.deadline}\n`;
+    message += `   📊 ${task.status || 'Chưa xác định'}\n`;
+    if (task.progress) message += `   📈 ${task.progress}%\n`;
+    if (task.notes) message += `   📝 ${task.notes}\n`;
+    message += '\n';
+  });
+
+  message += `💡 Gõ /menu để tạo công việc mới`;
+
+  ctx.telegram.editMessageText(
+    ctx.chat.id,
+    loadingMsg.message_id,
+    null,
+    message,
+    { parse_mode: 'Markdown' }
+  );
+});
+
+// Lệnh menu tạo công việc nhanh
+bot.command('menu', async (ctx) => {
+  const keyboard = {
+    inline_keyboard: [
+      [
+        { text: '📋 Tạo công việc mới', callback_data: 'create_task' },
+        { text: '📊 Xem danh sách', callback_data: 'view_tasks' }
+      ],
+      [
+        { text: '⚡ Công việc khẩn cấp', callback_data: 'urgent_task' },
+        { text: '📅 Công việc hôm nay', callback_data: 'today_task' }
+      ],
+      [
+        { text: '🔄 Đang thực hiện', callback_data: 'status_doing' },
+        { text: '✅ Hoàn thành', callback_data: 'status_done' }
+      ],
+      [
+        { text: '💰 Ghi chi tiêu', callback_data: 'add_expense' },
+        { text: '📊 Báo cáo tháng', callback_data: 'monthly_report' }
+      ]
+    ]
+  };
+
+  ctx.reply(
+    '🎛️ **MENU QUẢN LÝ**\n\nChọn chức năng bạn muốn sử dụng:',
+    {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard
+    }
+  );
+});
+
+// Xử lý callback từ inline keyboard
+bot.on('callback_query', async (ctx) => {
+  const data = ctx.callbackQuery.data;
+
+  try {
+    if (data === 'create_task') {
+      await ctx.answerCbQuery('Tạo công việc mới');
+      ctx.reply('📋 **TẠO CÔNG VIỆC MỚI**\n\nNhập theo format:\n/cv Tên công việc - Mô tả - Deadline - Trạng thái - Ghi chú\n\n💡 Ví dụ:\n/cv Họp team - Chuẩn bị agenda - 7/6 - Chưa bắt đầu - Cần book phòng', { parse_mode: 'Markdown' });
+
+    } else if (data === 'view_tasks') {
+      await ctx.answerCbQuery('Xem danh sách công việc');
+      ctx.reply('/tasks');
+
+    } else if (data === 'urgent_task') {
+      await ctx.answerCbQuery('Tạo công việc khẩn cấp');
+      ctx.reply('⚡ **CÔNG VIỆC KHẨN CẤP**\n\nNhập:\n/cv [Tên công việc] - [Mô tả] - Hôm nay - Khẩn cấp - [Ghi chú]', { parse_mode: 'Markdown' });
+
+    } else if (data === 'today_task') {
+      await ctx.answerCbQuery('Tạo công việc hôm nay');
+      const today = new Date().toLocaleDateString('vi-VN');
+      ctx.reply(`📅 **CÔNG VIỆC HÔM NAY**\n\nNhập:\n/cv [Tên công việc] - [Mô tả] - ${today} - Đang thực hiện - [Ghi chú]`, { parse_mode: 'Markdown' });
+
+    } else if (data === 'status_doing') {
+      await ctx.answerCbQuery('Cập nhật trạng thái đang thực hiện');
+      ctx.reply('🔄 **CẬP NHẬT TRẠNG THÁI**\n\nNhập:\n/cv [Tên công việc] - [Mô tả] - [Deadline] - Đang thực hiện - [Ghi chú]', { parse_mode: 'Markdown' });
+
+    } else if (data === 'status_done') {
+      await ctx.answerCbQuery('Cập nhật trạng thái hoàn thành');
+      ctx.reply('✅ **HOÀN THÀNH CÔNG VIỆC**\n\nNhập:\n/cv [Tên công việc] - [Mô tả] - [Deadline] - Hoàn thành - [Ghi chú]', { parse_mode: 'Markdown' });
+
+    } else if (data === 'add_expense') {
+      await ctx.answerCbQuery('Ghi chi tiêu');
+      ctx.reply('💰 **GHI CHI TIÊU**\n\nNhập theo format:\n"Mô tả - Số tiền - Phương thức"\n\n💡 Ví dụ:\n"Ăn trưa - 50k - tm"\n"Đổ xăng - 500k - tk"', { parse_mode: 'Markdown' });
+
+    } else if (data === 'monthly_report') {
+      await ctx.answerCbQuery('Xem báo cáo tháng');
+      ctx.reply('/report');
+    }
+  } catch (error) {
+    console.error('Lỗi xử lý callback:', error);
+    await ctx.answerCbQuery('Có lỗi xảy ra, vui lòng thử lại');
   }
 });
 
