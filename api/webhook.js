@@ -624,10 +624,16 @@ bot.command('addtask', async (ctx) => {
     return ctx.reply('❌ Không nhận diện được tên công việc!\n\n💡 Ví dụ:\n/addtask Hoàn thành báo cáo - 15/6 - Cao');
   }
 
+  // Hiển thị thông tin lưu trữ
+  const taskSheetId = TASK_SHEET_ID || process.env.GOOGLE_SHEET_ID;
+  const storageInfo = TASK_SHEET_ID ? 'Sheet riêng cho công việc' : 'Sheet chung với chi tiêu';
+
   let confirmMsg = `✅ THÔNG TIN CÔNG VIỆC:\n\n📋 ${task.name}`;
   if (task.deadline) confirmMsg += `\n⏰ Deadline: ${task.deadline}`;
   confirmMsg += `\n🎯 Ưu tiên: ${task.priority}`;
   confirmMsg += `\n📅 Ngày tạo: ${task.createdDate}`;
+  confirmMsg += `\n💾 Lưu vào: ${storageInfo}`;
+  confirmMsg += `\n📊 Sheet ID: ${taskSheetId}`;
   confirmMsg += '\n\n⏳ Đang lưu...';
 
   const loadingMsg = await ctx.reply(confirmMsg);
