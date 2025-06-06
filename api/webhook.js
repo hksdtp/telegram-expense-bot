@@ -548,7 +548,7 @@ bot.start((ctx) => {
 
 // Xử lý lệnh /help
 bot.help((ctx) => {
-  ctx.reply(`📖 HƯỚNG DẪN SỬ DỤNG:\n\n🏷️ **TOPIC CHI TIÊU:**\n1. Format cơ bản:\n"Ăn sáng 50k tm"\n"Xăng xe 500k tk"\n\n2. Format có dấu gạch ngang:\n"Mô tả - Số tiền - Phương thức"\n"Thanh toán sân pickleball - 2tr - tk"\n\n3. Format với số lượng:\n"Đổ xăng - 1tr - 70L - tk"\n"Mua nước - 50k - 5 chai - tm"\n\n4. Thu nhập/Hoàn tiền:\n"Lương tháng 15 triệu tk"\n"Hoàn 200k tm"\n\n5. Hỗ trợ ngày tháng:\n"Ăn trưa tháng 6 - 50k - tm"\n"Mua đồ ngày 15 - 200k - tk"\n\n📋 **TOPIC CÔNG VIỆC:**\n1. Thêm công việc:\n"#cv Hoàn thành báo cáo - 15/6 - Cao"\n"cv: Họp team - Thứ 2 - Bình thường"\n\n2. Format:\n"#cv [Tên công việc] - [Deadline] - [Ưu tiên]"\n\n💳 **Phương thức thanh toán:**\n• tk/ck = Chuyển khoản\n• tm = Tiền mặt\n\n💰 **Đơn vị tiền tệ:**\n• k = nghìn (100k = 100,000)\n• tr = triệu (2tr = 2,000,000)\n\n📊 **Đơn vị số lượng:**\n• L, lít, kg, g, cái, chiếc, ly, chai, hộp, gói, túi, m, cm, km\n\n🎯 **Mức ưu tiên:**\n• Cao, Trung bình, Bình thường, Thấp\n\n⏰ **Nhắc nhở tự động:**\n• 12:00 trưa\n• 18:00 tối\n• 22:00 tối\n\n📋 **Lệnh khác:**\n/reminder_on - Bật nhắc nhở\n/reminder_off - Tắt nhắc nhở\n/categories - Xem danh mục\n/report - Báo cáo chi tiêu tháng\n/addtask - Thêm công việc\n/getid - Lấy Chat ID\n/channel_test - Test kết nối Channel\n/group_test - Test kết nối Group`);
+  ctx.reply(`📖 HƯỚNG DẪN SỬ DỤNG:\n\n🏷️ **TOPIC CHI TIÊU:**\n1. Format cơ bản:\n"Ăn sáng 50k tm"\n"Xăng xe 500k tk"\n\n2. Format có dấu gạch ngang:\n"Mô tả - Số tiền - Phương thức"\n"Thanh toán sân pickleball - 2tr - tk"\n\n3. Format với số lượng:\n"Đổ xăng - 1tr - 70L - tk"\n"Mua nước - 50k - 5 chai - tm"\n\n4. Thu nhập/Hoàn tiền:\n"Lương tháng 15 triệu tk"\n"Hoàn 200k tm"\n\n5. Hỗ trợ ngày tháng:\n"Ăn trưa tháng 6 - 50k - tm"\n"Mua đồ ngày 15 - 200k - tk"\n\n📋 **QUẢN LÝ CÔNG VIỆC:**\n1. Lệnh thêm công việc:\n/addtask Đầu việc | Mô tả | Deadline | Trạng thái | Ghi chú\n\n2. Ví dụ đầy đủ:\n/addtask Chốt xe 16 chỗ | Liên hệ nhà xe | 6/6 | Đang thực hiện | Cần xác nhận giá\n\n3. Ví dụ đơn giản:\n/addtask Chốt xe 16 chỗ - 6/6 - Đang thực hiện\n\n💳 **Phương thức thanh toán:**\n• tk/ck = Chuyển khoản\n• tm = Tiền mặt\n\n💰 **Đơn vị tiền tệ:**\n• k = nghìn (100k = 100,000)\n• tr = triệu (2tr = 2,000,000)\n\n📊 **Đơn vị số lượng:**\n• L, lít, kg, g, cái, chiếc, ly, chai, hộp, gói, túi, m, cm, km\n\n🎯 **Mức ưu tiên:**\n• Cao, Trung bình, Bình thường, Thấp\n\n⏰ **Nhắc nhở tự động:**\n• 12:00 trưa\n• 18:00 tối\n• 22:00 tối\n\n📋 **Lệnh khác:**\n/reminder_on - Bật nhắc nhở\n/reminder_off - Tắt nhắc nhở\n/categories - Xem danh mục\n/report - Báo cáo chi tiêu tháng\n/addtask - Thêm công việc\n/getid - Lấy Chat ID\n/channel_test - Test kết nối Channel\n/group_test - Test kết nối Group`);
 });
 
 // Xử lý lệnh /categories
@@ -615,25 +615,26 @@ bot.command('addtask', async (ctx) => {
   const args = ctx.message.text.replace('/addtask', '').trim();
 
   if (!args) {
-    return ctx.reply('❌ Vui lòng nhập thông tin công việc!\n\n💡 Ví dụ:\n/addtask Hoàn thành báo cáo - 15/6 - Cao');
+    return ctx.reply('❌ Vui lòng nhập thông tin công việc!\n\n💡 **Format mới:**\n/addtask Đầu việc | Mô tả chi tiết | Deadline | Trạng thái | Ghi chú\n\n💡 **Ví dụ:**\n/addtask Chốt xe 16 chỗ | Liên hệ nhà xe, đặt cọc | 6/6/2025 | Đang thực hiện | Cần xác nhận giá\n\n💡 **Format đơn giản:**\n/addtask Chốt xe 16 chỗ - 6/6 - Đang thực hiện');
   }
 
   const task = parseTask(args);
 
   if (!task.name || task.name.trim() === '') {
-    return ctx.reply('❌ Không nhận diện được tên công việc!\n\n💡 Ví dụ:\n/addtask Hoàn thành báo cáo - 15/6 - Cao');
+    return ctx.reply('❌ Không nhận diện được tên công việc!\n\n💡 **Format mới:**\n/addtask Đầu việc | Mô tả chi tiết | Deadline | Trạng thái | Ghi chú\n\n💡 **Ví dụ:**\n/addtask Chốt xe 16 chỗ | Liên hệ nhà xe, đặt cọc | 6/6/2025 | Đang thực hiện | Cần xác nhận giá');
   }
 
   // Hiển thị thông tin lưu trữ
   const taskSheetId = TASK_SHEET_ID || process.env.GOOGLE_SHEET_ID;
-  const storageInfo = TASK_SHEET_ID ? 'Sheet riêng cho công việc' : 'Sheet chung với chi tiêu';
+  const storageInfo = TASK_SHEET_ID ? 'Sheet Ninh (riêng cho công việc)' : 'Sheet chung với chi tiêu';
 
-  let confirmMsg = `✅ THÔNG TIN CÔNG VIỆC:\n\n📋 ${task.name}`;
-  if (task.deadline) confirmMsg += `\n⏰ Deadline: ${task.deadline}`;
-  confirmMsg += `\n🎯 Ưu tiên: ${task.priority}`;
-  confirmMsg += `\n📅 Ngày tạo: ${task.createdDate}`;
-  confirmMsg += `\n💾 Lưu vào: ${storageInfo}`;
-  confirmMsg += `\n📊 Sheet ID: ${taskSheetId}`;
+  let confirmMsg = `✅ THÔNG TIN CÔNG VIỆC:\n\n📋 **Đầu việc:** ${task.name}`;
+  if (task.description) confirmMsg += `\n📝 **Mô tả:** ${task.description}`;
+  if (task.deadline) confirmMsg += `\n⏰ **Deadline:** ${task.deadline}`;
+  confirmMsg += `\n📊 **Trạng thái:** ${task.status}`;
+  confirmMsg += `\n📅 **Bắt đầu:** ${task.startTime}`;
+  if (task.notes) confirmMsg += `\n📝 **Ghi chú:** ${task.notes}`;
+  confirmMsg += `\n💾 **Lưu vào:** ${storageInfo}`;
   confirmMsg += '\n\n⏳ Đang lưu...';
 
   const loadingMsg = await ctx.reply(confirmMsg);
@@ -885,23 +886,36 @@ function parseTask(text) {
   // Nếu không có nội dung sau khi loại bỏ prefix
   if (!cleanText || cleanText.trim() === '') {
     console.log('No content after prefix removal');
-    return { name: '', deadline: '', priority: 'Bình thường' };
+    return { name: '', description: '', deadline: '', status: 'Chưa bắt đầu' };
   }
 
-  // Phân tích công việc theo format: "Tên công việc - Deadline - Ưu tiên"
-  const parts = cleanText.split(' - ').map(part => part.trim());
+  // Phân tích công việc theo format mới: "Đầu việc | Mô tả | Deadline | Trạng thái | Ghi chú"
+  const parts = cleanText.split(' | ').map(part => part.trim());
 
   let taskName = parts[0] || '';
-  let deadline = parts[1] || '';
-  let priority = parts[2] || 'Bình thường';
+  let description = parts[1] || '';
+  let deadline = parts[2] || '';
+  let status = parts[3] || 'Chưa bắt đầu';
+  let notes = parts[4] || '';
 
-  console.log('Parsed parts:', { taskName, deadline, priority });
+  // Fallback cho format cũ: "Tên công việc - Deadline - Ưu tiên"
+  if (parts.length === 1 && cleanText.includes(' - ')) {
+    const oldParts = cleanText.split(' - ').map(part => part.trim());
+    taskName = oldParts[0] || '';
+    deadline = oldParts[1] || '';
+    status = oldParts[2] || 'Chưa bắt đầu';
+  }
+
+  console.log('Parsed parts:', { taskName, description, deadline, status, notes });
 
   return {
     name: taskName,
+    description: description,
     deadline: deadline,
-    priority: priority,
-    status: 'Chưa hoàn thành',
+    status: status,
+    notes: notes,
+    progress: 0,
+    startTime: new Date().toLocaleDateString('vi-VN'),
     createdDate: new Date().toLocaleDateString('vi-VN'),
     createdTime: new Date().toISOString()
   };
@@ -915,16 +929,23 @@ async function saveTaskToSheet(userId, username, taskData) {
     const taskDoc = new GoogleSpreadsheet(taskSheetId, serviceAccountAuth);
 
     await taskDoc.loadInfo();
-    const sheet = taskDoc.sheetsByIndex[0];
+
+    // Tìm sheet "Ninh" hoặc sheet đầu tiên
+    let sheet = taskDoc.sheetsByTitle['Ninh'] || taskDoc.sheetsByIndex[0];
+
+    // Lấy số STT tiếp theo
+    const rows = await sheet.getRows();
+    const nextSTT = rows.length + 1;
 
     await sheet.addRow({
-      'Ngày tạo': taskData.createdDate,
-      'Tên công việc': taskData.name,
-      'Deadline': taskData.deadline,
-      'Ưu tiên': taskData.priority,
-      'Trạng thái': taskData.status,
-      'Người tạo': `${username} (${userId})`,
-      'Thời gian tạo': taskData.createdTime
+      'STT': nextSTT,
+      'Đầu Việc': taskData.name,
+      'Mô Tả Chi Tiết': taskData.description || '',
+      'Thời Gian Bắt Đầu': taskData.startTime || taskData.createdDate,
+      'Thời Gian Kết Thúc (Deadline)': taskData.deadline || '',
+      'Tiến Độ (%)': taskData.progress || 0,
+      'Trạng Thái': taskData.status || 'Chưa bắt đầu',
+      'Ghi Chú / Vướng Mắc:': taskData.notes || `Tạo bởi ${username} (${userId})`
     });
 
     return true;
