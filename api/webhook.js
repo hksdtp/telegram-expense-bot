@@ -302,35 +302,49 @@ async function findOrCreateMonthYearFolder(year, month) {
   try {
     const parentFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
     const folderName = `${year}_${month}`;
-    
+
+    console.log('🔍 Searching for folder:', folderName);
+    console.log('📂 Parent folder ID:', parentFolderId);
+
     // Tìm thư mục nếu đã tồn tại
     const searchResponse = await drive.files.list({
       q: `mimeType='application/vnd.google-apps.folder' and name='${folderName}' and '${parentFolderId}' in parents and trashed=false`,
       fields: 'files(id, name)',
       spaces: 'drive'
     });
-    
+
+    console.log('🔍 Search results:', searchResponse.data.files.length, 'folders found');
+
     // Nếu thư mục đã tồn tại, trả về ID
     if (searchResponse.data.files.length > 0) {
+      console.log('✅ Found existing folder:', searchResponse.data.files[0].id);
       return searchResponse.data.files[0].id;
     }
-    
+
+    console.log('📁 Creating new folder:', folderName);
     // Nếu chưa tồn tại, tạo thư mục mới
     const folderMetadata = {
       name: folderName,
       mimeType: 'application/vnd.google-apps.folder',
       parents: [parentFolderId]
     };
-    
+
     const folder = await drive.files.create({
       resource: folderMetadata,
       fields: 'id'
     });
-    
+
+    console.log('✅ Created new folder:', folder.data.id);
     return folder.data.id;
   } catch (error) {
-    console.error('Lỗi khi tìm/tạo thư mục:', error);
+    console.error('❌ Folder creation error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      status: error.status
+    });
     // Trả về thư mục gốc nếu có lỗi
+    console.log('🔄 Fallback to parent folder:', process.env.GOOGLE_DRIVE_FOLDER_ID);
     return process.env.GOOGLE_DRIVE_FOLDER_ID;
   }
 }
@@ -338,13 +352,22 @@ async function findOrCreateMonthYearFolder(year, month) {
 // Upload ảnh lên Google Drive theo tháng/năm
 async function uploadImageToDrive(filePath, fileName) {
   try {
+    console.log('📁 Starting Drive upload process...');
+    console.log('File path:', filePath);
+    console.log('File name:', fileName);
+    console.log('File exists:', fs.existsSync(filePath));
+
     const now = new Date();
     const year = now.getFullYear();
     const month = (now.getMonth() + 1).toString().padStart(2, '0'); // Tháng từ 01-12
-    
+
+    console.log('📅 Creating folder for:', `${year}_${month}`);
+
     // Tìm hoặc tạo thư mục tháng/năm
     const folderId = await findOrCreateMonthYearFolder(year, month);
-    
+    console.log('📂 Folder ID:', folderId);
+
+    console.log('⬆️ Uploading file to Drive...');
     const response = await drive.files.create({
       requestBody: {
         name: fileName,
@@ -357,6 +380,9 @@ async function uploadImageToDrive(filePath, fileName) {
       },
     });
 
+    console.log('✅ File uploaded, ID:', response.data.id);
+
+    console.log('🔓 Setting public permissions...');
     // Cấp quyền truy cập công khai
     await drive.permissions.create({
       fileId: response.data.id,
@@ -366,21 +392,29 @@ async function uploadImageToDrive(filePath, fileName) {
       },
     });
 
+    console.log('🔗 Getting share link...');
     // Lấy link chia sẻ
     const result = await drive.files.get({
       fileId: response.data.id,
       fields: 'webViewLink',
     });
 
+    console.log('✅ Upload successful, link:', result.data.webViewLink);
     return result.data.webViewLink;
   } catch (error) {
-    console.error('Lỗi khi upload ảnh:', error);
+    console.error('❌ Drive upload error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      status: error.status
+    });
     return null;
   } finally {
     // Xóa file tạm
     try {
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
+        console.log('🗑️ Temp file deleted');
       }
     } catch (err) {
       console.error('Lỗi khi xóa file tạm:', err);
@@ -898,6 +932,48 @@ bot.on('photo', async (ctx) => {
   } catch (error) {
     console.error('Error in simple photo handler:', error);
     await ctx.reply(`❌ LỖI: ${error.message}`);
+  }
+});
+
+// Lệnh test Google Drive
+bot.command('test_drive', async (ctx) => {
+  try {
+    const msg = await ctx.reply('🔧 Testing Google Drive access...');
+
+    console.log('🧪 Testing Drive access...');
+    const parentFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+
+    // Test list files in parent folder
+    const listResponse = await drive.files.list({
+      q: `'${parentFolderId}' in parents and trashed=false`,
+      fields: 'files(id, name, mimeType)',
+      pageSize: 5
+    });
+
+    let result = '✅ **GOOGLE DRIVE TEST**\n\n';
+    result += `📂 **Parent Folder ID:** ${parentFolderId}\n`;
+    result += `📁 **Files found:** ${listResponse.data.files.length}\n\n`;
+
+    if (listResponse.data.files.length > 0) {
+      result += '**Recent files:**\n';
+      listResponse.data.files.slice(0, 3).forEach(file => {
+        result += `• ${file.name} (${file.mimeType})\n`;
+      });
+    }
+
+    result += '\n🔧 Drive access working!';
+
+    await ctx.telegram.editMessageText(
+      ctx.chat.id,
+      msg.message_id,
+      null,
+      result,
+      { parse_mode: 'Markdown' }
+    );
+
+  } catch (error) {
+    console.error('Drive test error:', error);
+    await ctx.reply(`❌ **DRIVE TEST FAILED**\n\nError: ${error.message}`, { parse_mode: 'Markdown' });
   }
 });
 
