@@ -1068,25 +1068,25 @@ bot.command('share_folder', async (ctx) => {
   const serviceEmail = process.env.GOOGLE_CLIENT_EMAIL;
   const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
 
-  let message = '📁 **HƯỚNG DẪN SHARE FOLDER**\n\n';
-  message += '🔧 **Bước 1:** Vào Google Drive\n';
-  message += `📂 **Bước 2:** Tìm folder ID: \`${folderId}\`\n`;
-  message += '🔗 **Bước 3:** Mở link:\n';
+  let message = '📁 HƯỚNG DẪN SHARE FOLDER\n\n';
+  message += '🔧 Bước 1: Vào Google Drive\n';
+  message += `📂 Bước 2: Tìm folder ID: ${folderId}\n`;
+  message += '🔗 Bước 3: Mở link:\n';
   message += `https://drive.google.com/drive/folders/${folderId}\n\n`;
 
-  message += '👥 **Bước 4:** Share folder\n';
+  message += '👥 Bước 4: Share folder\n';
   message += '• Click chuột phải → Share\n';
-  message += `• Thêm email: \`${serviceEmail}\`\n`;
-  message += '• Cấp quyền: **Editor**\n';
+  message += `• Thêm email: ${serviceEmail}\n`;
+  message += '• Cấp quyền: Editor\n';
   message += '• Click Send\n\n';
 
-  message += '🧪 **Bước 5:** Test lại\n';
-  message += '• Gửi `/test_permissions`\n';
+  message += '🧪 Bước 5: Test lại\n';
+  message += '• Gửi /test_permissions\n';
   message += '• Hoặc gửi ảnh để test upload\n\n';
 
-  message += '💡 **Lưu ý:** Service account cần quyền Editor để tạo file';
+  message += '💡 Lưu ý: Service account cần quyền Editor để tạo file';
 
-  ctx.reply(message, { parse_mode: 'Markdown' });
+  ctx.reply(message);
 });
 
 // Lệnh test service account permissions
@@ -1106,18 +1106,18 @@ bot.command('test_permissions', async (ctx) => {
     const projectId = email.split('@')[1].split('.')[0];
     result += `🏗️ Project ID: ${projectId}\n\n`;
 
-    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result, { parse_mode: 'Markdown' });
+    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result);
 
     // Test 3: Sheets API (đã hoạt động)
     result += '2️⃣ Testing Sheets API...\n';
-    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result, { parse_mode: 'Markdown' });
+    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result);
 
     await doc.loadInfo();
     result += `✅ Sheets: Working (${doc.title})\n\n`;
 
     // Test 4: Drive API với error handling chi tiết
     result += '3️⃣ Testing Drive API...\n';
-    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result, { parse_mode: 'Markdown' });
+    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result);
 
     try {
       // Sử dụng auth hiện tại
@@ -1131,7 +1131,7 @@ bot.command('test_permissions', async (ctx) => {
 
       // Test folder access
       result += '4️⃣ Testing folder access...\n';
-      await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result, { parse_mode: 'Markdown' });
+      await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result);
 
       const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
       const folderResponse = await drive.files.get({
@@ -1164,10 +1164,10 @@ bot.command('test_permissions', async (ctx) => {
       }
     }
 
-    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result, { parse_mode: 'Markdown' });
+    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result);
 
   } catch (error) {
-    await ctx.reply(`❌ **PERMISSION TEST FAILED**\n\nError: ${error.message}`, { parse_mode: 'Markdown' });
+    await ctx.reply(`❌ PERMISSION TEST FAILED\n\nError: ${error.message}`);
   }
 });
 
