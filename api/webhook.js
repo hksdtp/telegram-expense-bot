@@ -817,10 +817,10 @@ bot.command('test_photo', async (ctx) => {
   ctx.reply('📸 **TEST UPLOAD ẢNH**\n\nHãy gửi 1 ảnh kèm chú thích để test:\n\n💡 Ví dụ:\n📷 [Gửi ảnh] + Caption: "Phở bò - 55k - tm"\n\n🔍 Bot sẽ hiển thị log chi tiết để debug');
 });
 
-// Test handler đơn giản cho ảnh
+// Handler ảnh với fallback (không upload Drive)
 bot.on('photo', async (ctx) => {
   try {
-    console.log('📸 PHOTO RECEIVED - Simple test');
+    console.log('📸 PHOTO RECEIVED');
     await ctx.reply('✅ Bot đã nhận được ảnh! Đang xử lý...');
 
     const caption = ctx.message.caption;
@@ -844,72 +844,24 @@ bot.on('photo', async (ctx) => {
     result += `📝 ${expense.description}\n`;
     result += `💰 ${expense.amount.toLocaleString('vi-VN')} ₫\n`;
     result += `💳 ${expense.paymentMethod}\n\n`;
-    result += `🔧 Bước tiếp theo: Upload lên Drive...`;
+    result += `💾 Đang lưu vào Google Sheets...`;
 
     const statusMsg = await ctx.reply(result);
 
-    // Lấy ảnh và upload
+    // Lưu vào sheet (không upload ảnh)
     try {
-      const photo = ctx.message.photo[ctx.message.photo.length - 1];
-      const fileId = photo.file_id;
-
-      await ctx.telegram.editMessageText(
-        ctx.chat.id,
-        statusMsg.message_id,
-        null,
-        result.replace('🔧 Bước tiếp theo: Upload lên Drive...', '📷 Đang tải ảnh về...')
-      );
-
-      // Tải ảnh về
-      const fileUrl = await ctx.telegram.getFileLink(fileId);
-      const tempFilePath = `/tmp/temp_${fileId}.jpg`;
-
-      const response = await axios({
-        method: 'GET',
-        url: fileUrl.href,
-        responseType: 'stream'
-      });
-
-      await pipeline(response.data, fs.createWriteStream(tempFilePath));
-
-      await ctx.telegram.editMessageText(
-        ctx.chat.id,
-        statusMsg.message_id,
-        null,
-        result.replace('🔧 Bước tiếp theo: Upload lên Drive...', '☁️ Đang upload lên Drive...')
-      );
-
-      // Upload lên Drive
-      console.log('🔧 Starting Drive upload...');
-      console.log('GOOGLE_DRIVE_FOLDER_ID:', process.env.GOOGLE_DRIVE_FOLDER_ID ? 'Set' : 'Not set');
-      const imageUrl = await uploadImageToDrive(tempFilePath, `hoa_don_${Date.now()}.jpg`);
-      console.log('Drive upload result:', imageUrl);
-
-      await ctx.telegram.editMessageText(
-        ctx.chat.id,
-        statusMsg.message_id,
-        null,
-        result.replace('🔧 Bước tiếp theo: Upload lên Drive...', '💾 Đang lưu vào Google Sheets...')
-      );
-
-      // Lưu vào sheet
       const saved = await saveToSheet(
         ctx.from.id,
         ctx.from.username || ctx.from.first_name,
         expense,
-        imageUrl || ''
+        '' // Không có link ảnh
       );
 
       if (saved) {
-        let finalMsg = result.replace('🔧 Bước tiếp theo: Upload lên Drive...', '✅ ĐÃ LƯU THÀNH CÔNG!');
-
-        if (imageUrl) {
-          finalMsg += `\n\n📎 **Link ảnh:** ${imageUrl}`;
-        } else {
-          finalMsg += `\n\n⚠️ **Ảnh:** Không upload được (kiểm tra GOOGLE_DRIVE_FOLDER_ID)`;
-        }
-
-        finalMsg += `\n📊 **Google Sheet:** ${process.env.GOOGLE_SHEET_ID ? 'Đã lưu' : 'Lỗi'}`;
+        let finalMsg = result.replace('💾 Đang lưu vào Google Sheets...', '✅ ĐÃ LƯU THÀNH CÔNG!');
+        finalMsg += `\n\n📊 **Google Sheet:** Đã lưu`;
+        finalMsg += `\n⚠️ **Ảnh:** Tạm thời không upload (Drive API đang sửa)`;
+        finalMsg += `\n💡 **Ghi chú:** Dữ liệu đã được lưu, ảnh sẽ được hỗ trợ sau`;
 
         await ctx.telegram.editMessageText(
           ctx.chat.id,
@@ -923,22 +875,22 @@ bot.on('photo', async (ctx) => {
           ctx.chat.id,
           statusMsg.message_id,
           null,
-          result.replace('🔧 Bước tiếp theo: Upload lên Drive...', '❌ LỖI KHI LƯU VÀO SHEETS!')
+          result.replace('💾 Đang lưu vào Google Sheets...', '❌ LỖI KHI LƯU VÀO SHEETS!')
         );
       }
 
-    } catch (uploadError) {
-      console.error('Upload error:', uploadError);
+    } catch (saveError) {
+      console.error('Save error:', saveError);
       await ctx.telegram.editMessageText(
         ctx.chat.id,
         statusMsg.message_id,
         null,
-        result.replace('🔧 Bước tiếp theo: Upload lên Drive...', `❌ LỖI UPLOAD: ${uploadError.message}`)
+        result.replace('💾 Đang lưu vào Google Sheets...', `❌ LỖI LƯU: ${saveError.message}`)
       );
     }
 
   } catch (error) {
-    console.error('Error in simple photo handler:', error);
+    console.error('Error in photo handler:', error);
     await ctx.reply(`❌ LỖI: ${error.message}`);
   }
 });
