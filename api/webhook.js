@@ -770,6 +770,11 @@ bot.command('test_cron', async (ctx) => {
   }
 });
 
+// Lệnh test upload ảnh
+bot.command('test_photo', async (ctx) => {
+  ctx.reply('📸 **TEST UPLOAD ẢNH**\n\nHãy gửi 1 ảnh kèm chú thích để test:\n\n💡 Ví dụ:\n📷 [Gửi ảnh] + Caption: "Phở bò - 55k - tm"\n\n🔍 Bot sẽ hiển thị log chi tiết để debug');
+});
+
 // Lệnh test đơn giản
 bot.command('test_simple', async (ctx) => {
   const userId = ctx.from.id;
@@ -1501,34 +1506,51 @@ bot.on('message', async (ctx) => {
 
 // Xử lý ảnh có chú thích
 bot.on('photo', async (ctx) => {
+  console.log('📸 Received photo message');
+  console.log('User:', ctx.from.id, ctx.from.username || ctx.from.first_name);
+
   const caption = ctx.message.caption;
-  
+  console.log('Caption:', caption);
+
   if (!caption) {
+    console.log('❌ No caption provided');
     return ctx.reply('⚠️ VUI LÒNG GỬI ẢNH KÈM CHÚ THÍCH!\n\nVí dụ: "Phở bò 55k tm"');
   }
 
+  console.log('🔍 Parsing expense from caption...');
   const expense = parseExpense(caption);
-  
+  console.log('Parsed expense:', expense);
+
   if (expense.amount <= 0) {
-    return ctx.reply('❌ KHÔNG NHẬN DIỆN ĐƯỢC SỐ TIỀN TRONG CHÚ THÍCH!');
+    console.log('❌ No amount detected');
+    return ctx.reply('❌ KHÔNG NHẬN DIỆN ĐƯỢC SỐ TIỀN TRONG CHÚ THÍCH!\n\n💡 Ví dụ đúng: "Phở bò - 55k - tm"');
   }
 
+  console.log('📷 Processing photo...');
   // Lấy ảnh chất lượng cao nhất
   const photo = ctx.message.photo[ctx.message.photo.length - 1];
   const fileId = photo.file_id;
-  
+  console.log('File ID:', fileId);
+
   // Tải ảnh về
+  console.log('🔗 Getting file link...');
   const fileUrl = await ctx.telegram.getFileLink(fileId);
+  console.log('File URL:', fileUrl.href);
+
   const tempFilePath = `/tmp/temp_${fileId}.jpg`;
-  
+  console.log('Temp file path:', tempFilePath);
+
   try {
+    console.log('⬇️ Downloading image...');
     const response = await axios({
       method: 'GET',
       url: fileUrl.href,
       responseType: 'stream'
     });
-    
+
+    console.log('💾 Saving to temp file...');
     await pipeline(response.data, fs.createWriteStream(tempFilePath));
+    console.log('✅ Image downloaded successfully');
     
     let confirmMsg = `✅ THÔNG TIN TỪ ẢNH:\n\n${expense.emoji} ${expense.category}\n📝 ${expense.description}\n💰 ${expense.amount.toLocaleString('vi-VN')} ₫`;
 
@@ -1552,7 +1574,9 @@ bot.on('photo', async (ctx) => {
     const loadingMsg = await ctx.reply(confirmMsg);
     
     // Upload ảnh lên Drive theo tháng/năm
+    console.log('☁️ Uploading to Google Drive...');
     const imageUrl = await uploadImageToDrive(tempFilePath, `hoa_don_${Date.now()}.jpg`);
+    console.log('Drive upload result:', imageUrl);
     
     if (!imageUrl) {
       await ctx.telegram.editMessageText(
