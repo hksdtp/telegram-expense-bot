@@ -942,6 +942,57 @@ bot.on('photo', async (ctx) => {
   }
 });
 
+// Lệnh debug credentials chi tiết
+bot.command('debug_creds', async (ctx) => {
+  const msg = await ctx.reply('🔧 Debugging Google Credentials...');
+
+  let result = '🔍 **CREDENTIALS DEBUG**\n\n';
+
+  const email = process.env.GOOGLE_CLIENT_EMAIL;
+  const privateKey = process.env.GOOGLE_PRIVATE_KEY;
+
+  result += `📧 **Email:** ${email ? email : 'Not set'}\n`;
+  result += `🔑 **Private Key Length:** ${privateKey ? privateKey.length : 0} chars\n`;
+
+  if (privateKey) {
+    result += `🔍 **Key starts with:** ${privateKey.substring(0, 50)}...\n`;
+    result += `🔍 **Has BEGIN:** ${privateKey.includes('-----BEGIN PRIVATE KEY-----') ? 'Yes' : 'No'}\n`;
+    result += `🔍 **Has END:** ${privateKey.includes('-----END PRIVATE KEY-----') ? 'Yes' : 'No'}\n`;
+    result += `🔍 **Has newlines:** ${privateKey.includes('\\n') ? 'Yes (escaped)' : 'No'}\n`;
+    result += `🔍 **Actual newlines:** ${privateKey.includes('\n') ? 'Yes (real)' : 'No'}\n`;
+  }
+
+  // Test tạo JWT
+  try {
+    const testAuth = new JWT({
+      email: email,
+      key: privateKey?.replace(/\\n/g, '\n'),
+      scopes: ['https://www.googleapis.com/auth/drive']
+    });
+
+    result += `\n✅ **JWT Creation:** Success\n`;
+
+    // Test get access token
+    try {
+      const token = await testAuth.getAccessToken();
+      result += `✅ **Access Token:** Success\n`;
+    } catch (tokenError) {
+      result += `❌ **Access Token:** ${tokenError.message}\n`;
+    }
+
+  } catch (jwtError) {
+    result += `\n❌ **JWT Creation:** ${jwtError.message}\n`;
+  }
+
+  await ctx.telegram.editMessageText(
+    ctx.chat.id,
+    msg.message_id,
+    null,
+    result,
+    { parse_mode: 'Markdown' }
+  );
+});
+
 // Lệnh test Google Auth
 bot.command('test_auth', async (ctx) => {
   try {
@@ -974,7 +1025,7 @@ bot.command('test_auth', async (ctx) => {
 
   } catch (error) {
     console.error('Auth test error:', error);
-    await ctx.reply(`❌ **AUTH TEST FAILED**\n\nError: ${error.message}`, { parse_mode: 'Markdown' });
+    await ctx.reply(`❌ **AUTH TEST FAILED**\n\nError: ${error.message}\n\n💡 Try /debug_creds for details`, { parse_mode: 'Markdown' });
   }
 });
 
