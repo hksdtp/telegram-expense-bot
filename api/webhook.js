@@ -990,14 +990,19 @@ bot.on('photo', async (ctx) => {
       );
 
       // Upload lên Drive với error handling chi tiết
-      try {
-        console.log('☁️ Starting Drive upload...');
-        imageUrl = await uploadImageToDriveWithFallback(tempFilePath, `hoa_don_${Date.now()}.jpg`);
-        console.log('✅ Drive upload result:', imageUrl);
-      } catch (driveError) {
-        console.error('❌ Drive upload failed:', driveError);
-        // Tiếp tục mà không có ảnh
+      if (process.env.DISABLE_DRIVE_UPLOAD === 'true') {
+        console.log('⚠️ Drive upload disabled by flag');
         imageUrl = '';
+      } else {
+        try {
+          console.log('☁️ Starting Drive upload...');
+          imageUrl = await uploadImageToDriveWithFallback(tempFilePath, `hoa_don_${Date.now()}.jpg`);
+          console.log('✅ Drive upload result:', imageUrl);
+        } catch (driveError) {
+          console.error('❌ Drive upload failed:', driveError);
+          // Tiếp tục mà không có ảnh
+          imageUrl = '';
+        }
       }
 
     } catch (photoError) {
@@ -1027,6 +1032,8 @@ bot.on('photo', async (ctx) => {
 
         if (imageUrl) {
           finalMsg += `\n📎 **Link ảnh:** ${imageUrl}`;
+        } else if (process.env.DISABLE_DRIVE_UPLOAD === 'true') {
+          finalMsg += `\n⚠️ **Ảnh:** Drive upload đã tắt (/enable_drive để bật)`;
         } else {
           finalMsg += `\n⚠️ **Ảnh:** Không upload được (Drive API lỗi)`;
         }
@@ -1063,6 +1070,35 @@ bot.on('photo', async (ctx) => {
   }
 });
 
+// Lệnh tạm thời disable Drive upload
+bot.command('disable_drive', async (ctx) => {
+  // Set environment variable tạm thời
+  process.env.DISABLE_DRIVE_UPLOAD = 'true';
+
+  let message = '⚠️ ĐÃ TẮT UPLOAD DRIVE TẠM THỜI\n\n';
+  message += '✅ Bot vẫn hoạt động bình thường:\n';
+  message += '• Ghi chi tiêu bằng text\n';
+  message += '• Ghi chi tiêu bằng ảnh (không lưu ảnh)\n';
+  message += '• Quản lý công việc\n';
+  message += '• Nhắc nhở tự động\n\n';
+  message += '🔧 Để bật lại: /enable_drive\n';
+  message += '💡 Dữ liệu vẫn được lưu vào Google Sheets';
+
+  ctx.reply(message);
+});
+
+// Lệnh bật lại Drive upload
+bot.command('enable_drive', async (ctx) => {
+  delete process.env.DISABLE_DRIVE_UPLOAD;
+
+  let message = '✅ ĐÃ BẬT LẠI UPLOAD DRIVE\n\n';
+  message += '📸 Bot sẽ thử upload ảnh lên Drive\n';
+  message += '🧪 Test bằng cách gửi ảnh + caption\n\n';
+  message += '⚠️ Nếu vẫn lỗi, dùng /disable_drive';
+
+  ctx.reply(message);
+});
+
 // Lệnh hướng dẫn share folder
 bot.command('share_folder', async (ctx) => {
   const serviceEmail = process.env.GOOGLE_CLIENT_EMAIL;
@@ -1087,6 +1123,86 @@ bot.command('share_folder', async (ctx) => {
   message += '💡 Lưu ý: Service account cần quyền Editor để tạo file';
 
   ctx.reply(message);
+});
+
+// Lệnh test Drive với nhiều scope khác nhau
+bot.command('test_drive_scopes', async (ctx) => {
+  const msg = await ctx.reply('🔧 Testing Drive with different scopes...');
+
+  try {
+    let result = '🔍 DRIVE SCOPE TESTING\n\n';
+
+    // Test 1: Scope drive.file (chỉ file do app tạo)
+    result += '1️⃣ Testing scope: drive.file\n';
+    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result);
+
+    try {
+      const auth1 = new JWT({
+        email: process.env.GOOGLE_CLIENT_EMAIL,
+        key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+        scopes: ['https://www.googleapis.com/auth/drive.file'],
+      });
+
+      const drive1 = google.drive({ version: 'v3', auth: auth1 });
+      const about1 = await drive1.about.get({ fields: 'user' });
+      result += `✅ drive.file: OK (${about1.data.user?.emailAddress})\n\n`;
+    } catch (e1) {
+      result += `❌ drive.file: ${e1.message}\n\n`;
+    }
+
+    // Test 2: Scope drive (full access)
+    result += '2️⃣ Testing scope: drive\n';
+    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result);
+
+    try {
+      const auth2 = new JWT({
+        email: process.env.GOOGLE_CLIENT_EMAIL,
+        key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+        scopes: ['https://www.googleapis.com/auth/drive'],
+      });
+
+      const drive2 = google.drive({ version: 'v3', auth: auth2 });
+      const about2 = await drive2.about.get({ fields: 'user' });
+      result += `✅ drive: OK (${about2.data.user?.emailAddress})\n\n`;
+
+      // Test folder access với scope drive
+      result += '3️⃣ Testing folder access with drive scope\n';
+      await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result);
+
+      const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+      const folderInfo = await drive2.files.get({
+        fileId: folderId,
+        fields: 'id, name, mimeType, permissions'
+      });
+
+      result += `✅ Folder: ${folderInfo.data.name}\n`;
+      result += `📁 Type: ${folderInfo.data.mimeType}\n`;
+      result += `🔑 Permissions: ${folderInfo.data.permissions?.length || 0} entries\n\n`;
+
+      result += '🎉 SUCCESS! Drive API working with full scope!';
+
+    } catch (e2) {
+      result += `❌ drive: ${e2.message}\n`;
+      result += `🔧 Code: ${e2.code}\n\n`;
+
+      if (e2.code === 401) {
+        result += '💡 Solutions:\n';
+        result += '• Service account key might be invalid\n';
+        result += '• Try regenerating the key\n';
+        result += '• Check if API is enabled in correct project\n';
+      } else if (e2.code === 403) {
+        result += '💡 Solutions:\n';
+        result += '• Folder not shared with service account\n';
+        result += '• Service account needs Editor permission\n';
+        result += '• Check folder ID is correct\n';
+      }
+    }
+
+    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result);
+
+  } catch (error) {
+    await ctx.reply(`❌ SCOPE TEST FAILED\n\nError: ${error.message}`);
+  }
 });
 
 // Lệnh test service account permissions
