@@ -16,7 +16,8 @@ const serviceAccountAuth = new JWT({
   scopes: [
     'https://www.googleapis.com/auth/spreadsheets',
     'https://www.googleapis.com/auth/drive',
-    'https://www.googleapis.com/auth/drive.file'
+    'https://www.googleapis.com/auth/drive.file',
+    'https://www.googleapis.com/auth/drive.metadata'
   ],
 });
 
@@ -942,6 +943,62 @@ bot.on('photo', async (ctx) => {
   }
 });
 
+// Lệnh test Drive với auth mới
+bot.command('test_drive_simple', async (ctx) => {
+  try {
+    const msg = await ctx.reply('🔧 Testing Drive with fresh auth...');
+
+    // Tạo auth mới với scope đầy đủ
+    const freshAuth = new JWT({
+      email: process.env.GOOGLE_CLIENT_EMAIL,
+      key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+      scopes: [
+        'https://www.googleapis.com/auth/drive',
+        'https://www.googleapis.com/auth/drive.file',
+        'https://www.googleapis.com/auth/drive.metadata.readonly'
+      ],
+    });
+
+    // Tạo Drive client mới
+    const freshDrive = google.drive({ version: 'v3', auth: freshAuth });
+
+    let result = '🔍 **FRESH DRIVE TEST**\n\n';
+
+    // Test 1: Get access token
+    result += '1️⃣ Getting access token...\n';
+    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result, { parse_mode: 'Markdown' });
+
+    const token = await freshAuth.getAccessToken();
+    result += `✅ Token: ${token ? 'OK' : 'Failed'}\n\n`;
+
+    // Test 2: Simple Drive API call
+    result += '2️⃣ Testing Drive API...\n';
+    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result, { parse_mode: 'Markdown' });
+
+    const aboutResponse = await freshDrive.about.get({ fields: 'user' });
+    result += `✅ API: OK (${aboutResponse.data.user?.emailAddress})\n\n`;
+
+    // Test 3: Test folder access
+    const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+    result += '3️⃣ Testing folder...\n';
+    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result, { parse_mode: 'Markdown' });
+
+    const folderResponse = await freshDrive.files.get({
+      fileId: folderId,
+      fields: 'id, name, mimeType'
+    });
+
+    result += `✅ Folder: ${folderResponse.data.name}\n\n`;
+    result += '🎉 **All tests passed with fresh auth!**';
+
+    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result, { parse_mode: 'Markdown' });
+
+  } catch (error) {
+    console.error('Fresh Drive test error:', error);
+    await ctx.reply(`❌ **FRESH DRIVE TEST FAILED**\n\nError: ${error.message}\nCode: ${error.code}`, { parse_mode: 'Markdown' });
+  }
+});
+
 // Lệnh debug credentials chi tiết
 bot.command('debug_creds', async (ctx) => {
   const msg = await ctx.reply('🔧 Debugging Google Credentials...');
@@ -1103,6 +1160,67 @@ bot.command('test_drive', async (ctx) => {
     }
 
     await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, errorResult, { parse_mode: 'Markdown' });
+  }
+});
+
+// Lệnh kiểm tra Google Cloud APIs
+bot.command('check_apis', async (ctx) => {
+  const msg = await ctx.reply('🔧 Checking Google Cloud APIs...');
+
+  let result = '🔍 **GOOGLE CLOUD APIs CHECK**\n\n';
+
+  try {
+    // Test Sheets API
+    result += '📊 **Google Sheets API:**\n';
+    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result, { parse_mode: 'Markdown' });
+
+    await doc.loadInfo();
+    result += `✅ Sheets API: Working\n`;
+    result += `📋 Sheet: ${doc.title}\n\n`;
+
+    // Test Drive API với scope khác nhau
+    result += '☁️ **Google Drive API:**\n';
+    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result, { parse_mode: 'Markdown' });
+
+    // Test với scope readonly trước
+    const readOnlyAuth = new JWT({
+      email: process.env.GOOGLE_CLIENT_EMAIL,
+      key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+      scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+    });
+
+    const readOnlyDrive = google.drive({ version: 'v3', auth: readOnlyAuth });
+
+    try {
+      const aboutResponse = await readOnlyDrive.about.get({ fields: 'user' });
+      result += `✅ Drive API (readonly): Working\n`;
+      result += `👤 User: ${aboutResponse.data.user?.emailAddress}\n\n`;
+
+      // Test folder access với readonly
+      const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+      const folderResponse = await readOnlyDrive.files.get({
+        fileId: folderId,
+        fields: 'id, name'
+      });
+      result += `✅ Folder access: Working\n`;
+      result += `📁 Folder: ${folderResponse.data.name}\n\n`;
+
+    } catch (driveError) {
+      result += `❌ Drive API: ${driveError.message}\n`;
+      result += `🔧 Code: ${driveError.code}\n\n`;
+    }
+
+    result += '💡 **Next steps:**\n';
+    result += '• If Sheets works but Drive fails → Enable Drive API\n';
+    result += '• If both fail → Check service account\n';
+    result += '• If folder access fails → Share folder with service account';
+
+    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result, { parse_mode: 'Markdown' });
+
+  } catch (error) {
+    result += `❌ **Error:** ${error.message}\n`;
+    result += `🔧 **Code:** ${error.code}`;
+    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result, { parse_mode: 'Markdown' });
   }
 });
 
