@@ -804,7 +804,87 @@ bot.on('photo', async (ctx) => {
     result += `💳 ${expense.paymentMethod}\n\n`;
     result += `🔧 Bước tiếp theo: Upload lên Drive...`;
 
-    await ctx.reply(result);
+    const statusMsg = await ctx.reply(result);
+
+    // Lấy ảnh và upload
+    try {
+      const photo = ctx.message.photo[ctx.message.photo.length - 1];
+      const fileId = photo.file_id;
+
+      await ctx.telegram.editMessageText(
+        ctx.chat.id,
+        statusMsg.message_id,
+        null,
+        result.replace('🔧 Bước tiếp theo: Upload lên Drive...', '📷 Đang tải ảnh về...')
+      );
+
+      // Tải ảnh về
+      const fileUrl = await ctx.telegram.getFileLink(fileId);
+      const tempFilePath = `/tmp/temp_${fileId}.jpg`;
+
+      const response = await axios({
+        method: 'GET',
+        url: fileUrl.href,
+        responseType: 'stream'
+      });
+
+      await pipeline(response.data, fs.createWriteStream(tempFilePath));
+
+      await ctx.telegram.editMessageText(
+        ctx.chat.id,
+        statusMsg.message_id,
+        null,
+        result.replace('🔧 Bước tiếp theo: Upload lên Drive...', '☁️ Đang upload lên Drive...')
+      );
+
+      // Upload lên Drive
+      const imageUrl = await uploadImageToDrive(tempFilePath, `hoa_don_${Date.now()}.jpg`);
+
+      await ctx.telegram.editMessageText(
+        ctx.chat.id,
+        statusMsg.message_id,
+        null,
+        result.replace('🔧 Bước tiếp theo: Upload lên Drive...', '💾 Đang lưu vào Google Sheets...')
+      );
+
+      // Lưu vào sheet
+      const saved = await saveToSheet(
+        ctx.from.id,
+        ctx.from.username || ctx.from.first_name,
+        expense,
+        imageUrl || ''
+      );
+
+      if (saved) {
+        let finalMsg = result.replace('🔧 Bước tiếp theo: Upload lên Drive...', '✅ ĐÃ LƯU THÀNH CÔNG!');
+        if (imageUrl) {
+          finalMsg += `\n\n📎 Link ảnh: ${imageUrl}`;
+        }
+
+        await ctx.telegram.editMessageText(
+          ctx.chat.id,
+          statusMsg.message_id,
+          null,
+          finalMsg
+        );
+      } else {
+        await ctx.telegram.editMessageText(
+          ctx.chat.id,
+          statusMsg.message_id,
+          null,
+          result.replace('🔧 Bước tiếp theo: Upload lên Drive...', '❌ LỖI KHI LƯU VÀO SHEETS!')
+        );
+      }
+
+    } catch (uploadError) {
+      console.error('Upload error:', uploadError);
+      await ctx.telegram.editMessageText(
+        ctx.chat.id,
+        statusMsg.message_id,
+        null,
+        result.replace('🔧 Bước tiếp theo: Upload lên Drive...', `❌ LỖI UPLOAD: ${uploadError.message}`)
+      );
+    }
 
   } catch (error) {
     console.error('Error in simple photo handler:', error);
