@@ -851,10 +851,11 @@ bot.command('test_reminder', async (ctx) => {
 
 // Xử lý lệnh /start
 bot.start((ctx) => {
+  console.log('🚀 Bot started by user:', ctx.from.id, ctx.from.username || ctx.from.first_name);
   const userId = ctx.from.id;
   reminderUsers.add(userId); // Tự động đăng ký nhắc nhở
 
-  ctx.reply(`👋 Xin chào ${ctx.from.first_name}!\n\n📝 Nhập chi tiêu theo cú pháp:\n"Mô tả [số tiền] [phương thức]\n\nVí dụ: "Phở bò 55k tm" hoặc "Ứng 5 triệu tk"`);
+  ctx.reply(`👋 Xin chào ${ctx.from.first_name}!\n\n📝 Nhập chi tiêu theo cú pháp:\n"Mô tả [số tiền] [phương thức]\n\nVí dụ: "Phở bò 55k tm" hoặc "Ứng 5 triệu tk"\n\n🤖 Bot version: ${new Date().toISOString()}`);
 });
 
 // Xử lý lệnh /help
