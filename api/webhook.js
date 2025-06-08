@@ -838,7 +838,10 @@ bot.on('photo', async (ctx) => {
       );
 
       // Upload lên Drive
+      console.log('🔧 Starting Drive upload...');
+      console.log('GOOGLE_DRIVE_FOLDER_ID:', process.env.GOOGLE_DRIVE_FOLDER_ID ? 'Set' : 'Not set');
       const imageUrl = await uploadImageToDrive(tempFilePath, `hoa_don_${Date.now()}.jpg`);
+      console.log('Drive upload result:', imageUrl);
 
       await ctx.telegram.editMessageText(
         ctx.chat.id,
@@ -857,15 +860,21 @@ bot.on('photo', async (ctx) => {
 
       if (saved) {
         let finalMsg = result.replace('🔧 Bước tiếp theo: Upload lên Drive...', '✅ ĐÃ LƯU THÀNH CÔNG!');
+
         if (imageUrl) {
-          finalMsg += `\n\n📎 Link ảnh: ${imageUrl}`;
+          finalMsg += `\n\n📎 **Link ảnh:** ${imageUrl}`;
+        } else {
+          finalMsg += `\n\n⚠️ **Ảnh:** Không upload được (kiểm tra GOOGLE_DRIVE_FOLDER_ID)`;
         }
+
+        finalMsg += `\n📊 **Google Sheet:** ${process.env.GOOGLE_SHEET_ID ? 'Đã lưu' : 'Lỗi'}`;
 
         await ctx.telegram.editMessageText(
           ctx.chat.id,
           statusMsg.message_id,
           null,
-          finalMsg
+          finalMsg,
+          { parse_mode: 'Markdown' }
         );
       } else {
         await ctx.telegram.editMessageText(
@@ -890,6 +899,33 @@ bot.on('photo', async (ctx) => {
     console.error('Error in simple photo handler:', error);
     await ctx.reply(`❌ LỖI: ${error.message}`);
   }
+});
+
+// Lệnh kiểm tra Environment Variables
+bot.command('check_env', async (ctx) => {
+  let message = '🔧 **KIỂM TRA ENVIRONMENT VARIABLES**\n\n';
+
+  const envVars = [
+    'BOT_TOKEN',
+    'GOOGLE_SHEET_ID',
+    'GOOGLE_CLIENT_EMAIL',
+    'GOOGLE_PRIVATE_KEY',
+    'GOOGLE_DRIVE_FOLDER_ID',
+    'TASK_SHEET_ID'
+  ];
+
+  envVars.forEach(varName => {
+    const value = process.env[varName];
+    if (value) {
+      message += `✅ **${varName}:** Set (${value.length} chars)\n`;
+    } else {
+      message += `❌ **${varName}:** Not set\n`;
+    }
+  });
+
+  message += '\n💡 Tất cả variables cần được set để bot hoạt động đầy đủ';
+
+  ctx.reply(message, { parse_mode: 'Markdown' });
 });
 
 // Lệnh test đơn giản
