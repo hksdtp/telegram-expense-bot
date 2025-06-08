@@ -134,7 +134,7 @@ function parseExpense(text) {
         if (amountMatch && amountMatch.length > 0 && !quantityMatch) {
           // Đây là số tiền
           const match = amountMatch[0];
-          const numberMatch = match.match(/(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?)/);
+          const numberMatch = match.match(/(\d+(?:[.,]\d{3})*(?:[.,]\d+)?)/);
           const unitMatch = match.match(/(k|tr|nghìn|triệu|đ|đồng|d|vnd)/i);
 
           if (numberMatch) {
