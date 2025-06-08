@@ -110,6 +110,7 @@ function parseExpense(text) {
   let amount = 0;
   let amountText = '';
   let paymentMethodFromText = '';
+  let quantity = 1; // Khởi tạo quantity ở đây
 
   if (hasDashFormat) {
     // Xử lý format: "mô tả - số tiền - số lượng - phương thức"
@@ -186,7 +187,6 @@ function parseExpense(text) {
   let emoji = '💰';
   let subcategory = 'Khác';
   let paymentMethod = 'Tiền mặt';
-  let quantity = 1;
   let type = 'Chi';
 
   // Phát hiện loại giao dịch
