@@ -124,7 +124,7 @@ function parseExpense(text) {
         const part = parts[i];
 
         // Kiểm tra xem có phải số tiền không
-        const amountRegex = /(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?)\s*(k|tr|nghìn|triệu|đ|đồng|d|vnd)?\b/gi;
+        const amountRegex = /(\d+(?:[.,]\d{3})*(?:[.,]\d+)?)\s*(k|tr|nghìn|triệu|đ|đồng|d|vnd)?\b/gi;
         const amountMatch = part.match(amountRegex);
 
         // Kiểm tra xem có phải số lượng không (ví dụ: 70L, 5kg, 10 cái)
@@ -162,7 +162,7 @@ function parseExpense(text) {
     }
   } else {
     // Xử lý format cũ
-    const amountRegex = /(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?)\s*(k|tr|nghìn|triệu|đ|đồng|d|vnd)?\b/gi;
+    const amountRegex = /(\d+(?:[.,]\d{3})*(?:[.,]\d+)?)\s*(k|tr|nghìn|triệu|đ|đồng|d|vnd)?\b/gi;
     const amountMatches = [...input.matchAll(amountRegex)];
 
     // Tìm số tiền hợp lệ nhất (lớn nhất)
