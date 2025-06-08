@@ -15,12 +15,19 @@ const serviceAccountAuth = new JWT({
   key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
   scopes: [
     'https://www.googleapis.com/auth/spreadsheets',
-    'https://www.googleapis.com/auth/drive'
+    'https://www.googleapis.com/auth/drive',
+    'https://www.googleapis.com/auth/drive.file'
   ],
 });
 
+// Khởi tạo Google APIs với auth
 const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID, serviceAccountAuth);
-const drive = google.drive({ version: 'v3', auth: serviceAccountAuth });
+
+// Khởi tạo Drive API với service account auth
+const drive = google.drive({
+  version: 'v3',
+  auth: serviceAccountAuth
+});
 
 // Cấu hình danh mục
 const categories = {
@@ -935,6 +942,42 @@ bot.on('photo', async (ctx) => {
   }
 });
 
+// Lệnh test Google Auth
+bot.command('test_auth', async (ctx) => {
+  try {
+    const msg = await ctx.reply('🔧 Testing Google Authentication...');
+
+    console.log('🧪 Testing Google Auth...');
+
+    // Test auth bằng cách lấy access token
+    const accessToken = await serviceAccountAuth.getAccessToken();
+    console.log('✅ Access token obtained');
+
+    // Test basic Drive API call
+    const aboutResponse = await drive.about.get({
+      fields: 'user'
+    });
+
+    let result = '✅ **GOOGLE AUTH TEST**\n\n';
+    result += `🔑 **Access Token:** ${accessToken ? 'OK' : 'Failed'}\n`;
+    result += `👤 **Service Account:** ${aboutResponse.data.user?.emailAddress || 'Unknown'}\n`;
+    result += `📧 **Config Email:** ${process.env.GOOGLE_CLIENT_EMAIL}\n\n`;
+    result += '🔧 Authentication working!';
+
+    await ctx.telegram.editMessageText(
+      ctx.chat.id,
+      msg.message_id,
+      null,
+      result,
+      { parse_mode: 'Markdown' }
+    );
+
+  } catch (error) {
+    console.error('Auth test error:', error);
+    await ctx.reply(`❌ **AUTH TEST FAILED**\n\nError: ${error.message}`, { parse_mode: 'Markdown' });
+  }
+});
+
 // Lệnh test Google Drive
 bot.command('test_drive', async (ctx) => {
   try {
@@ -990,16 +1033,32 @@ bot.command('check_env', async (ctx) => {
     'TASK_SHEET_ID'
   ];
 
+  // Kiểm tra format private key
+  const privateKey = process.env.GOOGLE_PRIVATE_KEY;
+  let keyStatus = 'Not set';
+  if (privateKey) {
+    if (privateKey.includes('-----BEGIN PRIVATE KEY-----')) {
+      keyStatus = 'Valid format';
+    } else {
+      keyStatus = 'Invalid format (missing headers)';
+    }
+  }
+
   envVars.forEach(varName => {
     const value = process.env[varName];
     if (value) {
-      message += `✅ **${varName}:** Set (${value.length} chars)\n`;
+      if (varName === 'GOOGLE_PRIVATE_KEY') {
+        message += `✅ **${varName}:** ${keyStatus} (${value.length} chars)\n`;
+      } else {
+        message += `✅ **${varName}:** Set (${value.length} chars)\n`;
+      }
     } else {
       message += `❌ **${varName}:** Not set\n`;
     }
   });
 
   message += '\n💡 Tất cả variables cần được set để bot hoạt động đầy đủ';
+  message += `\n\n🔧 **Service Account Email:** ${process.env.GOOGLE_CLIENT_EMAIL}`;
 
   ctx.reply(message, { parse_mode: 'Markdown' });
 });
