@@ -775,6 +775,43 @@ bot.command('test_photo', async (ctx) => {
   ctx.reply('📸 **TEST UPLOAD ẢNH**\n\nHãy gửi 1 ảnh kèm chú thích để test:\n\n💡 Ví dụ:\n📷 [Gửi ảnh] + Caption: "Phở bò - 55k - tm"\n\n🔍 Bot sẽ hiển thị log chi tiết để debug');
 });
 
+// Test handler đơn giản cho ảnh
+bot.on('photo', async (ctx) => {
+  try {
+    console.log('📸 PHOTO RECEIVED - Simple test');
+    await ctx.reply('✅ Bot đã nhận được ảnh! Đang xử lý...');
+
+    const caption = ctx.message.caption;
+    console.log('Caption:', caption);
+
+    if (!caption) {
+      return ctx.reply('⚠️ VUI LÒNG GỬI ẢNH KÈM CHÚ THÍCH!\n\nVí dụ: "Phở bò - 55k - tm"');
+    }
+
+    await ctx.reply(`📝 Chú thích nhận được: "${caption}"\n\n🔍 Đang phân tích...`);
+
+    const expense = parseExpense(caption);
+    console.log('Parsed expense:', expense);
+
+    if (expense.amount <= 0) {
+      return ctx.reply('❌ KHÔNG NHẬN DIỆN ĐƯỢC SỐ TIỀN!\n\n💡 Thử format: "Mô tả - Số tiền - Phương thức"');
+    }
+
+    let result = `✅ PHÂN TÍCH THÀNH CÔNG:\n\n`;
+    result += `${expense.emoji} ${expense.category}\n`;
+    result += `📝 ${expense.description}\n`;
+    result += `💰 ${expense.amount.toLocaleString('vi-VN')} ₫\n`;
+    result += `💳 ${expense.paymentMethod}\n\n`;
+    result += `🔧 Bước tiếp theo: Upload lên Drive...`;
+
+    await ctx.reply(result);
+
+  } catch (error) {
+    console.error('Error in simple photo handler:', error);
+    await ctx.reply(`❌ LỖI: ${error.message}`);
+  }
+});
+
 // Lệnh test đơn giản
 bot.command('test_simple', async (ctx) => {
   const userId = ctx.from.id;
@@ -1504,120 +1541,7 @@ bot.on('message', async (ctx) => {
 
 
 
-// Xử lý ảnh có chú thích
-bot.on('photo', async (ctx) => {
-  console.log('📸 Received photo message');
-  console.log('User:', ctx.from.id, ctx.from.username || ctx.from.first_name);
 
-  const caption = ctx.message.caption;
-  console.log('Caption:', caption);
-
-  if (!caption) {
-    console.log('❌ No caption provided');
-    return ctx.reply('⚠️ VUI LÒNG GỬI ẢNH KÈM CHÚ THÍCH!\n\nVí dụ: "Phở bò 55k tm"');
-  }
-
-  console.log('🔍 Parsing expense from caption...');
-  const expense = parseExpense(caption);
-  console.log('Parsed expense:', expense);
-
-  if (expense.amount <= 0) {
-    console.log('❌ No amount detected');
-    return ctx.reply('❌ KHÔNG NHẬN DIỆN ĐƯỢC SỐ TIỀN TRONG CHÚ THÍCH!\n\n💡 Ví dụ đúng: "Phở bò - 55k - tm"');
-  }
-
-  console.log('📷 Processing photo...');
-  // Lấy ảnh chất lượng cao nhất
-  const photo = ctx.message.photo[ctx.message.photo.length - 1];
-  const fileId = photo.file_id;
-  console.log('File ID:', fileId);
-
-  // Tải ảnh về
-  console.log('🔗 Getting file link...');
-  const fileUrl = await ctx.telegram.getFileLink(fileId);
-  console.log('File URL:', fileUrl.href);
-
-  const tempFilePath = `/tmp/temp_${fileId}.jpg`;
-  console.log('Temp file path:', tempFilePath);
-
-  try {
-    console.log('⬇️ Downloading image...');
-    const response = await axios({
-      method: 'GET',
-      url: fileUrl.href,
-      responseType: 'stream'
-    });
-
-    console.log('💾 Saving to temp file...');
-    await pipeline(response.data, fs.createWriteStream(tempFilePath));
-    console.log('✅ Image downloaded successfully');
-    
-    let confirmMsg = `✅ THÔNG TIN TỪ ẢNH:\n\n${expense.emoji} ${expense.category}\n📝 ${expense.description}\n💰 ${expense.amount.toLocaleString('vi-VN')} ₫`;
-
-    // Hiển thị số lượng nếu khác 1
-    if (expense.quantity && expense.quantity !== 1) {
-      confirmMsg += `\n📊 Số lượng: ${expense.quantity}`;
-    }
-
-    confirmMsg += `\n💳 ${expense.paymentMethod}`;
-
-    // Hiển thị ngày nếu khác ngày hiện tại
-    if (expense.customDate) {
-      const now = new Date();
-      const targetDate = expense.customDate;
-      if (targetDate.toDateString() !== now.toDateString()) {
-        confirmMsg += `\n📅 ${targetDate.toLocaleDateString('vi-VN')}`;
-      }
-    }
-
-    confirmMsg += '\n\n⏳ Đang tải ảnh lên Drive...';
-    const loadingMsg = await ctx.reply(confirmMsg);
-    
-    // Upload ảnh lên Drive theo tháng/năm
-    console.log('☁️ Uploading to Google Drive...');
-    const imageUrl = await uploadImageToDrive(tempFilePath, `hoa_don_${Date.now()}.jpg`);
-    console.log('Drive upload result:', imageUrl);
-    
-    if (!imageUrl) {
-      await ctx.telegram.editMessageText(
-        ctx.chat.id,
-        loadingMsg.message_id,
-        null,
-        '❌ LỖI KHI TẢI ẢNH LÊN DRIVE! Đang lưu dữ liệu...'
-      );
-    }
-    
-    // Lưu vào sheet
-    const saved = await saveToSheet(
-      ctx.from.id,
-      ctx.from.username || ctx.from.first_name,
-      expense,
-      imageUrl || ''
-    );
-    
-    if (saved) {
-      let successMsg = '✅ ĐÃ LƯU THÀNH CÔNG!\n';
-      if (imageUrl) successMsg += `📎 Link ảnh: ${imageUrl}`;
-      
-      await ctx.telegram.editMessageText(
-        ctx.chat.id,
-        loadingMsg.message_id,
-        null,
-        successMsg
-      );
-    } else {
-      await ctx.telegram.editMessageText(
-        ctx.chat.id,
-        loadingMsg.message_id,
-        null,
-        '❌ LỖI KHI LƯU DỮ LIỆU VÀO SHEET!'
-      );
-    }
-  } catch (error) {
-    console.error('Lỗi khi xử lý ảnh:', error);
-    ctx.reply('❌ CÓ LỖI XẢY RA KHI XỬ LÝ ẢNH!');
-  }
-});
 
 // Xử lý lỗi
 bot.catch((err, ctx) => {
