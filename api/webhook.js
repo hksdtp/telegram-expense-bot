@@ -943,6 +943,88 @@ bot.on('photo', async (ctx) => {
   }
 });
 
+// Lệnh test service account permissions
+bot.command('test_permissions', async (ctx) => {
+  const msg = await ctx.reply('🔧 Testing service account permissions...');
+
+  try {
+    let result = '🔍 **SERVICE ACCOUNT PERMISSIONS**\n\n';
+
+    // Test 1: Basic auth info
+    result += '1️⃣ Service Account Info:\n';
+    result += `📧 Email: ${process.env.GOOGLE_CLIENT_EMAIL}\n`;
+    result += `🔑 Key length: ${process.env.GOOGLE_PRIVATE_KEY?.length} chars\n\n`;
+
+    // Test 2: Project info từ email
+    const email = process.env.GOOGLE_CLIENT_EMAIL;
+    const projectId = email.split('@')[1].split('.')[0];
+    result += `🏗️ Project ID: ${projectId}\n\n`;
+
+    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result, { parse_mode: 'Markdown' });
+
+    // Test 3: Sheets API (đã hoạt động)
+    result += '2️⃣ Testing Sheets API...\n';
+    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result, { parse_mode: 'Markdown' });
+
+    await doc.loadInfo();
+    result += `✅ Sheets: Working (${doc.title})\n\n`;
+
+    // Test 4: Drive API với error handling chi tiết
+    result += '3️⃣ Testing Drive API...\n';
+    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result, { parse_mode: 'Markdown' });
+
+    try {
+      // Sử dụng auth hiện tại
+      const aboutResponse = await drive.about.get({
+        fields: 'user,storageQuota'
+      });
+
+      result += `✅ Drive: Working\n`;
+      result += `👤 User: ${aboutResponse.data.user?.emailAddress}\n`;
+      result += `💾 Storage: ${aboutResponse.data.storageQuota?.usage || 'Unknown'}\n\n`;
+
+      // Test folder access
+      result += '4️⃣ Testing folder access...\n';
+      await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result, { parse_mode: 'Markdown' });
+
+      const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+      const folderResponse = await drive.files.get({
+        fileId: folderId,
+        fields: 'id, name, mimeType, owners'
+      });
+
+      result += `✅ Folder: ${folderResponse.data.name}\n`;
+      result += `📁 Type: ${folderResponse.data.mimeType}\n`;
+      result += `👤 Owner: ${folderResponse.data.owners?.[0]?.emailAddress || 'Unknown'}\n\n`;
+
+      result += '🎉 **All permissions working!**';
+
+    } catch (driveError) {
+      result += `❌ Drive Error: ${driveError.message}\n`;
+      result += `🔧 Code: ${driveError.code}\n`;
+      result += `📋 Status: ${driveError.status}\n\n`;
+
+      // Gợi ý khắc phục
+      if (driveError.code === 401) {
+        result += '💡 **Solutions for 401:**\n';
+        result += '• Wait 5 minutes after enabling API\n';
+        result += '• Check service account has Editor role\n';
+        result += '• Regenerate service account key\n';
+      } else if (driveError.code === 403) {
+        result += '💡 **Solutions for 403:**\n';
+        result += '• Share folder with service account\n';
+        result += '• Check folder permissions\n';
+        result += '• Verify folder ID is correct\n';
+      }
+    }
+
+    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result, { parse_mode: 'Markdown' });
+
+  } catch (error) {
+    await ctx.reply(`❌ **PERMISSION TEST FAILED**\n\nError: ${error.message}`, { parse_mode: 'Markdown' });
+  }
+});
+
 // Lệnh test Drive với auth mới
 bot.command('test_drive_simple', async (ctx) => {
   try {
