@@ -1029,45 +1029,80 @@ bot.command('test_auth', async (ctx) => {
   }
 });
 
-// Lệnh test Google Drive
+// Lệnh test Google Drive step by step
 bot.command('test_drive', async (ctx) => {
+  const msg = await ctx.reply('🔧 Testing Google Drive access...');
+
   try {
-    const msg = await ctx.reply('🔧 Testing Google Drive access...');
+    let result = '🔍 **GOOGLE DRIVE TEST**\n\n';
 
-    console.log('🧪 Testing Drive access...');
+    // Step 1: Test Drive API basic call
+    result += '📋 **Step 1:** Testing Drive API...\n';
+    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result, { parse_mode: 'Markdown' });
+
+    const aboutResponse = await drive.about.get({ fields: 'user' });
+    result += `✅ Drive API working! User: ${aboutResponse.data.user?.emailAddress}\n\n`;
+
+    // Step 2: Test folder access
     const parentFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+    result += `📋 **Step 2:** Testing folder access...\n`;
+    result += `📂 Folder ID: ${parentFolderId}\n`;
+    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result, { parse_mode: 'Markdown' });
 
-    // Test list files in parent folder
+    // Test get folder info
+    const folderInfo = await drive.files.get({
+      fileId: parentFolderId,
+      fields: 'id, name, mimeType, permissions'
+    });
+
+    result += `✅ Folder found: ${folderInfo.data.name}\n`;
+    result += `📁 Type: ${folderInfo.data.mimeType}\n\n`;
+
+    // Step 3: Test list files
+    result += `📋 **Step 3:** Listing files...\n`;
+    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result, { parse_mode: 'Markdown' });
+
     const listResponse = await drive.files.list({
       q: `'${parentFolderId}' in parents and trashed=false`,
       fields: 'files(id, name, mimeType)',
       pageSize: 5
     });
 
-    let result = '✅ **GOOGLE DRIVE TEST**\n\n';
-    result += `📂 **Parent Folder ID:** ${parentFolderId}\n`;
-    result += `📁 **Files found:** ${listResponse.data.files.length}\n\n`;
+    result += `✅ Found ${listResponse.data.files.length} files\n\n`;
 
     if (listResponse.data.files.length > 0) {
       result += '**Recent files:**\n';
       listResponse.data.files.slice(0, 3).forEach(file => {
-        result += `• ${file.name} (${file.mimeType})\n`;
+        result += `• ${file.name}\n`;
       });
+      result += '\n';
     }
 
-    result += '\n🔧 Drive access working!';
+    result += '🎉 **All tests passed!** Drive is ready for uploads.';
 
-    await ctx.telegram.editMessageText(
-      ctx.chat.id,
-      msg.message_id,
-      null,
-      result,
-      { parse_mode: 'Markdown' }
-    );
+    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result, { parse_mode: 'Markdown' });
 
   } catch (error) {
     console.error('Drive test error:', error);
-    await ctx.reply(`❌ **DRIVE TEST FAILED**\n\nError: ${error.message}`, { parse_mode: 'Markdown' });
+    let errorResult = '❌ **DRIVE TEST FAILED**\n\n';
+    errorResult += `**Error:** ${error.message}\n`;
+    errorResult += `**Code:** ${error.code || 'Unknown'}\n\n`;
+
+    if (error.message.includes('File not found')) {
+      errorResult += '💡 **Solution:** Check GOOGLE_DRIVE_FOLDER_ID\n';
+      errorResult += '• Make sure folder exists\n';
+      errorResult += '• Share folder with service account';
+    } else if (error.message.includes('insufficient permissions')) {
+      errorResult += '💡 **Solution:** Share folder with service account\n';
+      errorResult += `• Email: ${process.env.GOOGLE_CLIENT_EMAIL}\n`;
+      errorResult += '• Permission: Editor';
+    } else if (error.message.includes('API has not been used')) {
+      errorResult += '💡 **Solution:** Enable Google Drive API\n';
+      errorResult += '• Go to Google Cloud Console\n';
+      errorResult += '• Enable Drive API for your project';
+    }
+
+    await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, errorResult, { parse_mode: 'Markdown' });
   }
 });
 
