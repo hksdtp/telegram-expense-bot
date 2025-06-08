@@ -357,7 +357,109 @@ async function findOrCreateMonthYearFolder(year, month) {
   }
 }
 
-// Upload ảnh lên Google Drive theo tháng/năm
+// Upload ảnh với fallback method
+async function uploadImageToDriveWithFallback(filePath, fileName) {
+  console.log('🔄 Trying upload with fallback methods...');
+
+  // Method 1: Thử upload trực tiếp vào thư mục gốc
+  try {
+    console.log('📁 Method 1: Direct upload to root folder');
+    const parentFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+
+    const response = await drive.files.create({
+      requestBody: {
+        name: fileName,
+        mimeType: 'image/jpeg',
+        parents: [parentFolderId],
+      },
+      media: {
+        mimeType: 'image/jpeg',
+        body: fs.createReadStream(filePath),
+      },
+    });
+
+    console.log('✅ Method 1 success, file ID:', response.data.id);
+
+    // Set public permissions
+    await drive.permissions.create({
+      fileId: response.data.id,
+      requestBody: {
+        role: 'reader',
+        type: 'anyone',
+      },
+    });
+
+    // Get share link
+    const result = await drive.files.get({
+      fileId: response.data.id,
+      fields: 'webViewLink',
+    });
+
+    console.log('✅ Method 1 complete, link:', result.data.webViewLink);
+    return result.data.webViewLink;
+
+  } catch (method1Error) {
+    console.error('❌ Method 1 failed:', method1Error.message);
+
+    // Method 2: Thử với auth mới
+    try {
+      console.log('🔄 Method 2: Fresh auth');
+      const freshAuth = new JWT({
+        email: process.env.GOOGLE_CLIENT_EMAIL,
+        key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+        scopes: ['https://www.googleapis.com/auth/drive.file'],
+      });
+
+      const freshDrive = google.drive({ version: 'v3', auth: freshAuth });
+
+      const response = await freshDrive.files.create({
+        requestBody: {
+          name: fileName,
+          mimeType: 'image/jpeg',
+          parents: [process.env.GOOGLE_DRIVE_FOLDER_ID],
+        },
+        media: {
+          mimeType: 'image/jpeg',
+          body: fs.createReadStream(filePath),
+        },
+      });
+
+      console.log('✅ Method 2 success, file ID:', response.data.id);
+
+      await freshDrive.permissions.create({
+        fileId: response.data.id,
+        requestBody: {
+          role: 'reader',
+          type: 'anyone',
+        },
+      });
+
+      const result = await freshDrive.files.get({
+        fileId: response.data.id,
+        fields: 'webViewLink',
+      });
+
+      console.log('✅ Method 2 complete, link:', result.data.webViewLink);
+      return result.data.webViewLink;
+
+    } catch (method2Error) {
+      console.error('❌ Method 2 failed:', method2Error.message);
+      throw new Error(`All upload methods failed. Last error: ${method2Error.message}`);
+    }
+  } finally {
+    // Cleanup temp file
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        console.log('🗑️ Temp file cleaned up');
+      }
+    } catch (cleanupError) {
+      console.error('⚠️ Cleanup error:', cleanupError);
+    }
+  }
+}
+
+// Upload ảnh lên Google Drive theo tháng/năm (original function)
 async function uploadImageToDrive(filePath, fileName) {
   try {
     console.log('📁 Starting Drive upload process...');
@@ -817,7 +919,7 @@ bot.command('test_photo', async (ctx) => {
   ctx.reply('📸 **TEST UPLOAD ẢNH**\n\nHãy gửi 1 ảnh kèm chú thích để test:\n\n💡 Ví dụ:\n📷 [Gửi ảnh] + Caption: "Phở bò - 55k - tm"\n\n🔍 Bot sẽ hiển thị log chi tiết để debug');
 });
 
-// Handler ảnh với fallback (không upload Drive)
+// Handler ảnh với upload Drive đầy đủ
 bot.on('photo', async (ctx) => {
   try {
     console.log('📸 PHOTO RECEIVED');
@@ -844,24 +946,89 @@ bot.on('photo', async (ctx) => {
     result += `📝 ${expense.description}\n`;
     result += `💰 ${expense.amount.toLocaleString('vi-VN')} ₫\n`;
     result += `💳 ${expense.paymentMethod}\n\n`;
-    result += `💾 Đang lưu vào Google Sheets...`;
+    result += `📷 Đang xử lý ảnh...`;
 
     const statusMsg = await ctx.reply(result);
 
-    // Lưu vào sheet (không upload ảnh)
+    // Xử lý ảnh và upload
+    let imageUrl = '';
     try {
+      const photo = ctx.message.photo[ctx.message.photo.length - 1];
+      const fileId = photo.file_id;
+
+      console.log('📷 Processing photo, file ID:', fileId);
+
+      await ctx.telegram.editMessageText(
+        ctx.chat.id,
+        statusMsg.message_id,
+        null,
+        result.replace('📷 Đang xử lý ảnh...', '⬇️ Đang tải ảnh về...')
+      );
+
+      // Tải ảnh về
+      const fileUrl = await ctx.telegram.getFileLink(fileId);
+      const tempFilePath = `/tmp/temp_${fileId}.jpg`;
+
+      console.log('⬇️ Downloading from:', fileUrl.href);
+      console.log('💾 Saving to:', tempFilePath);
+
+      const response = await axios({
+        method: 'GET',
+        url: fileUrl.href,
+        responseType: 'stream'
+      });
+
+      await pipeline(response.data, fs.createWriteStream(tempFilePath));
+      console.log('✅ Image downloaded successfully');
+
+      await ctx.telegram.editMessageText(
+        ctx.chat.id,
+        statusMsg.message_id,
+        null,
+        result.replace('📷 Đang xử lý ảnh...', '☁️ Đang upload lên Drive...')
+      );
+
+      // Upload lên Drive với error handling chi tiết
+      try {
+        console.log('☁️ Starting Drive upload...');
+        imageUrl = await uploadImageToDriveWithFallback(tempFilePath, `hoa_don_${Date.now()}.jpg`);
+        console.log('✅ Drive upload result:', imageUrl);
+      } catch (driveError) {
+        console.error('❌ Drive upload failed:', driveError);
+        // Tiếp tục mà không có ảnh
+        imageUrl = '';
+      }
+
+    } catch (photoError) {
+      console.error('❌ Photo processing failed:', photoError);
+      imageUrl = '';
+    }
+
+    // Lưu vào sheet
+    try {
+      await ctx.telegram.editMessageText(
+        ctx.chat.id,
+        statusMsg.message_id,
+        null,
+        result.replace('📷 Đang xử lý ảnh...', '💾 Đang lưu vào Google Sheets...')
+      );
+
       const saved = await saveToSheet(
         ctx.from.id,
         ctx.from.username || ctx.from.first_name,
         expense,
-        '' // Không có link ảnh
+        imageUrl
       );
 
       if (saved) {
-        let finalMsg = result.replace('💾 Đang lưu vào Google Sheets...', '✅ ĐÃ LƯU THÀNH CÔNG!');
+        let finalMsg = result.replace('📷 Đang xử lý ảnh...', '✅ ĐÃ LƯU THÀNH CÔNG!');
         finalMsg += `\n\n📊 **Google Sheet:** Đã lưu`;
-        finalMsg += `\n⚠️ **Ảnh:** Tạm thời không upload (Drive API đang sửa)`;
-        finalMsg += `\n💡 **Ghi chú:** Dữ liệu đã được lưu, ảnh sẽ được hỗ trợ sau`;
+
+        if (imageUrl) {
+          finalMsg += `\n📎 **Link ảnh:** ${imageUrl}`;
+        } else {
+          finalMsg += `\n⚠️ **Ảnh:** Không upload được (Drive API lỗi)`;
+        }
 
         await ctx.telegram.editMessageText(
           ctx.chat.id,
@@ -875,7 +1042,7 @@ bot.on('photo', async (ctx) => {
           ctx.chat.id,
           statusMsg.message_id,
           null,
-          result.replace('💾 Đang lưu vào Google Sheets...', '❌ LỖI KHI LƯU VÀO SHEETS!')
+          result.replace('📷 Đang xử lý ảnh...', '❌ LỖI KHI LƯU VÀO SHEETS!')
         );
       }
 
@@ -885,7 +1052,7 @@ bot.on('photo', async (ctx) => {
         ctx.chat.id,
         statusMsg.message_id,
         null,
-        result.replace('💾 Đang lưu vào Google Sheets...', `❌ LỖI LƯU: ${saveError.message}`)
+        result.replace('📷 Đang xử lý ảnh...', `❌ LỖI LƯU: ${saveError.message}`)
       );
     }
 
@@ -893,6 +1060,32 @@ bot.on('photo', async (ctx) => {
     console.error('Error in photo handler:', error);
     await ctx.reply(`❌ LỖI: ${error.message}`);
   }
+});
+
+// Lệnh hướng dẫn share folder
+bot.command('share_folder', async (ctx) => {
+  const serviceEmail = process.env.GOOGLE_CLIENT_EMAIL;
+  const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+
+  let message = '📁 **HƯỚNG DẪN SHARE FOLDER**\n\n';
+  message += '🔧 **Bước 1:** Vào Google Drive\n';
+  message += `📂 **Bước 2:** Tìm folder ID: \`${folderId}\`\n`;
+  message += '🔗 **Bước 3:** Mở link:\n';
+  message += `https://drive.google.com/drive/folders/${folderId}\n\n`;
+
+  message += '👥 **Bước 4:** Share folder\n';
+  message += '• Click chuột phải → Share\n';
+  message += `• Thêm email: \`${serviceEmail}\`\n`;
+  message += '• Cấp quyền: **Editor**\n';
+  message += '• Click Send\n\n';
+
+  message += '🧪 **Bước 5:** Test lại\n';
+  message += '• Gửi `/test_permissions`\n';
+  message += '• Hoặc gửi ảnh để test upload\n\n';
+
+  message += '💡 **Lưu ý:** Service account cần quyền Editor để tạo file';
+
+  ctx.reply(message, { parse_mode: 'Markdown' });
 });
 
 // Lệnh test service account permissions
