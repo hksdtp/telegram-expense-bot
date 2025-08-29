@@ -1454,6 +1454,74 @@ bot.command('test_simple', async (ctx) => {
   ctx.reply(message, { parse_mode: 'Markdown' });
 });
 
+// Lệnh debug sheet structure
+bot.command('debug_sheet', async (ctx) => {
+  try {
+    const msg = await ctx.reply('🔍 Đang kiểm tra cấu trúc Google Sheet...');
+
+    const taskSheetId = TASK_SHEET_ID || '1JwFzEMRZsxAuIzMV0XRSI5X98AXeGa9f2cXVkUzXReE';
+    const taskDoc = new GoogleSpreadsheet(taskSheetId, serviceAccountAuth);
+
+    await taskDoc.loadInfo();
+
+    let result = `🔍 **THÔNG TIN GOOGLE SHEET**\n\n`;
+    result += `📋 **Tên:** ${taskDoc.title}\n`;
+    result += `🆔 **ID:** ${taskSheetId}\n\n`;
+
+    result += `📊 **CÁC SHEET CON:**\n`;
+    taskDoc.sheetsByIndex.forEach((sheet, index) => {
+      result += `${index + 1}. **${sheet.title}** (${sheet.rowCount} rows, ${sheet.columnCount} cols)\n`;
+    });
+
+    // Kiểm tra sheet "Ninh"
+    const ninhSheet = taskDoc.sheetsByTitle['Ninh'];
+    if (ninhSheet) {
+      result += `\n✅ **Sheet "Ninh" tồn tại**\n`;
+
+      // Lấy header row để xem các cột
+      const rows = await ninhSheet.getRows({ limit: 1 });
+      if (rows.length > 0) {
+        result += `📝 **Các cột trong sheet Ninh:**\n`;
+        const headers = Object.keys(rows[0]._rawData);
+        headers.forEach((header, index) => {
+          if (header && header.trim()) {
+            result += `• ${header}\n`;
+          }
+        });
+      }
+    } else {
+      result += `\n❌ **Sheet "Ninh" không tồn tại**\n`;
+      result += `📋 Sẽ sử dụng sheet đầu tiên: "${taskDoc.sheetsByIndex[0]?.title}"\n`;
+
+      // Kiểm tra sheet đầu tiên
+      const firstSheet = taskDoc.sheetsByIndex[0];
+      if (firstSheet) {
+        const rows = await firstSheet.getRows({ limit: 1 });
+        if (rows.length > 0) {
+          result += `📝 **Các cột trong sheet đầu tiên:**\n`;
+          const headers = Object.keys(rows[0]._rawData);
+          headers.forEach((header, index) => {
+            if (header && header.trim()) {
+              result += `• ${header}\n`;
+            }
+          });
+        }
+      }
+    }
+
+    await ctx.telegram.editMessageText(
+      ctx.chat.id,
+      msg.message_id,
+      null,
+      result,
+      { parse_mode: 'Markdown' }
+    );
+
+  } catch (error) {
+    await ctx.reply(`❌ **LỖI DEBUG SHEET**\n\nError: ${error.message}`);
+  }
+});
+
 // Lệnh kiểm tra trạng thái nhắc nhở
 bot.command('reminder_status', (ctx) => {
   const userId = ctx.from.id;
@@ -2000,15 +2068,19 @@ async function saveTaskToSheet(userId, username, taskData) {
     const taskDoc = new GoogleSpreadsheet(taskSheetId, serviceAccountAuth);
 
     await taskDoc.loadInfo();
+    console.log('📋 Sheet title:', taskDoc.title);
 
     // Tìm sheet "Ninh" hoặc sheet đầu tiên
     let sheet = taskDoc.sheetsByTitle['Ninh'] || taskDoc.sheetsByIndex[0];
+    console.log('📊 Using sheet:', sheet.title);
 
     // Lấy số STT tiếp theo
     const rows = await sheet.getRows();
     const nextSTT = rows.length + 1;
+    console.log('🔢 Next STT:', nextSTT);
 
-    await sheet.addRow({
+    // Thử lưu với error handling chi tiết
+    const rowData = {
       'STT': nextSTT,
       'Đầu Việc': taskData.name,
       'Mô Tả Chi Tiết': taskData.description || '',
@@ -2017,11 +2089,19 @@ async function saveTaskToSheet(userId, username, taskData) {
       'Tiến Độ (%)': taskData.progress || 0,
       'Trạng Thái': taskData.status || 'Chưa bắt đầu',
       'Ghi Chú / Vướng Mắc:': taskData.notes || `Tạo bởi ${username} (${userId})`
-    });
+    };
+
+    console.log('💾 Attempting to save row data:', rowData);
+    await sheet.addRow(rowData);
+    console.log('✅ Task saved successfully');
 
     return true;
   } catch (error) {
-    console.error('Lỗi khi lưu công việc:', error);
+    console.error('❌ Lỗi chi tiết khi lưu công việc:', {
+      message: error.message,
+      stack: error.stack,
+      taskData: taskData
+    });
     return false;
   }
 }
