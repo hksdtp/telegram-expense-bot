@@ -22,7 +22,7 @@ const serviceAccountAuth = new JWT({
 });
 
 // Khởi tạo Google APIs với auth
-const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID, serviceAccountAuth);
+const doc = new GoogleSpreadsheet('1JwFzEMRZsxAuIzMV0XRSI5X98AXeGa9f2cXVkUzXReE', serviceAccountAuth);
 
 // Khởi tạo Drive API với service account auth
 const drive = google.drive({
@@ -30,25 +30,27 @@ const drive = google.drive({
   auth: serviceAccountAuth
 });
 
-// Cấu hình danh mục
-const categories = {
-  'chi phí xe ô tô': { emoji: '🚗', subcategories: ['xăng', 'rửa xe', 'vetc', 'sửa chữa', 'vé đỗ xe'] },
-  'xăng': { emoji: '⛽', subcategories: ['xăng', 'nhiên liệu'] },
-  'rửa xe': { emoji: '🧽', subcategories: ['rửa xe', 'vệ sinh xe'] },
-  'vetc': { emoji: '🎫', subcategories: ['vetc', 'thu phí không dừng'] },
-  'nhà hàng': { emoji: '🍽️', subcategories: ['ăn sáng', 'ăn trưa', 'ăn tối', 'café'] },
-  'ăn sáng': { emoji: '🍳', subcategories: ['phở', 'bánh mì', 'cơm'] },
-  'ăn trưa': { emoji: '🍱', subcategories: ['cơm', 'bún', 'phở'] },
-  'ăn tối': { emoji: '🍽️', subcategories: ['cơm', 'lẩu', 'nướng'] },
-  'café': { emoji: '☕', subcategories: ['cà phê', 'trà', 'nước'] },
-  'giao nhận đồ': { emoji: '📦', subcategories: ['giao đồ', 'ship đồ', 'grab food'] },
-  'ship đồ': { emoji: '📮', subcategories: ['phí ship', 'giao hàng'] },
-  'mua đồ': { emoji: '🛒', subcategories: ['quần áo', 'giày dép', 'mỹ phẩm'] },
-  'dịch vụ': { emoji: '🔧', subcategories: ['cắt tóc', 'massage', 'spa'] },
-  'chi phí khác': { emoji: '💰', subcategories: ['khác', 'linh tinh'] },
-  'thu nhập': { emoji: '💵', subcategories: ['lương', 'thưởng', 'ứng'] },
-  'hoàn về': { emoji: '💸', subcategories: ['tài khoản', 'hoàn tiền', 'refund'] }
-};
+// Hàm phân tích dữ liệu kiểm kê kho
+function parseInventoryData(text) {
+  const parts = text.split('.').map(part => part.trim());
+
+  if (parts.length < 6) { // Yêu cầu tối thiểu 6 trường, Note có thể trống
+    return null;
+  }
+
+  const [stt, ma, tenVatTu, unit, viTri, soDem, ...noteParts] = parts;
+  const note = noteParts.join('. ').trim(); // Ghép lại các phần còn lại của Note
+
+  return {
+    'STT': stt,
+    'Mã': ma,
+    'Tên vật tư': tenVatTu,
+    'Unit': unit,
+    'Vị trí': viTri,
+    'Số đếm': soDem,
+    'Note': note || '' // Nếu không có Note thì để trống
+  };
+}
 
 const paymentMethods = {
   'tk': 'Chuyển khoản',
@@ -104,206 +106,7 @@ function parseDateTime(text) {
   return targetDate;
 }
 
-// Hàm phân tích chi tiêu cải tiến
-function parseExpense(text) {
-  const input = text.toLowerCase().trim();
-  let originalText = text.trim();
 
-  // Phân tích ngày tháng
-  const customDate = parseDateTime(text);
-
-  // Kiểm tra xem có sử dụng format với dấu - không
-  const hasDashFormat = text.includes(' - ');
-  let description = '';
-  let amount = 0;
-  let amountText = '';
-  let paymentMethodFromText = '';
-  let quantity = 1; // Khởi tạo quantity ở đây
-
-  if (hasDashFormat) {
-    // Xử lý format: "mô tả - số tiền - số lượng - phương thức"
-    const parts = originalText.split(' - ').map(part => part.trim());
-
-    if (parts.length >= 2) {
-      description = parts[0]; // Phần đầu là mô tả
-
-      // Tìm số tiền, số lượng và phương thức trong các phần còn lại
-      for (let i = 1; i < parts.length; i++) {
-        const part = parts[i];
-
-        // Kiểm tra xem có phải số tiền không
-        const amountRegex = /(\d+(?:[.,]\d{3})*(?:[.,]\d+)?)\s*(k|tr|nghìn|triệu|đ|đồng|d|vnd)?\b/gi;
-        const amountMatch = part.match(amountRegex);
-
-        // Kiểm tra xem có phải số lượng không (ví dụ: 70L, 5kg, 10 cái)
-        const quantityRegex = /(\d+(?:[.,]\d+)?)\s*(l|lít|kg|g|gram|cái|chiếc|ly|chai|hộp|gói|túi|m|cm|km)\b/gi;
-        const quantityMatch = part.match(quantityRegex);
-
-        if (amountMatch && amountMatch.length > 0 && !quantityMatch) {
-          // Đây là số tiền
-          const match = amountMatch[0];
-          const numberMatch = match.match(/(\d+(?:[.,]\d{3})*(?:[.,]\d+)?)/);
-          const unitMatch = match.match(/(k|tr|nghìn|triệu|đ|đồng|d|vnd)/i);
-
-          if (numberMatch) {
-            let value = parseFloat(numberMatch[1].replace(/\./g, '').replace(/,/g, '.'));
-            const unit = unitMatch ? unitMatch[1].toLowerCase() : '';
-
-            if (unit.includes('k') || unit.includes('nghìn')) value *= 1000;
-            else if (unit.includes('tr') || unit.includes('triệu')) value *= 1000000;
-
-            amount = value;
-            amountText = match;
-          }
-        } else if (quantityMatch && quantityMatch.length > 0) {
-          // Đây là số lượng
-          const match = quantityMatch[0];
-          const numberMatch = match.match(/(\d+(?:[.,]\d+)?)/);
-          if (numberMatch) {
-            quantity = parseFloat(numberMatch[1]);
-          }
-        } else if (!amountMatch && !quantityMatch && part.length <= 10) {
-          // Có thể là phương thức thanh toán
-          paymentMethodFromText = part;
-        }
-      }
-    }
-  } else {
-    // Xử lý format cũ
-    const amountRegex = /(\d+(?:[.,]\d{3})*(?:[.,]\d+)?)\s*(k|tr|nghìn|triệu|đ|đồng|d|vnd)?\b/gi;
-    const amountMatches = [...input.matchAll(amountRegex)];
-
-    // Tìm số tiền hợp lệ nhất (lớn nhất)
-    for (const match of amountMatches) {
-      let value = parseFloat(match[1].replace(/\./g, '').replace(/,/g, '.'));
-      const unit = match[2] ? match[2].toLowerCase() : '';
-
-      if (unit.includes('k') || unit.includes('nghìn')) value *= 1000;
-      else if (unit.includes('tr') || unit.includes('triệu')) value *= 1000000;
-
-      if (value > amount) {
-        amount = value;
-        amountText = match[0];
-      }
-    }
-
-    // Loại bỏ số tiền khỏi mô tả
-    description = originalText.replace(amountText, '').trim();
-  }
-
-  let category = 'Chi phí khác';
-  let emoji = '💰';
-  let subcategory = 'Khác';
-  let paymentMethod = 'Tiền mặt';
-  let type = 'Chi';
-
-  // Phát hiện loại giao dịch
-  const incomeKeywords = ['thu', 'nhận', 'lương', 'ứng'];
-  const refundKeywords = ['hoàn'];
-
-  if (refundKeywords.some(keyword => input.includes(keyword))) {
-    type = 'Thu';
-    category = 'Hoàn về';
-    emoji = '💸';
-    subcategory = 'Tài khoản';
-
-    // Tạo mô tả chi tiết cho hoàn tiền
-    if (description.toLowerCase().includes('hoàn')) {
-      const cleanDesc = description.replace(/\d+[\s]*[ktr]*[\s]*(nghìn|triệu|đ|đồng|d|vnd)*/gi, '').trim();
-      if (cleanDesc.length > 0) {
-        description = `Hoàn về tài khoản - ${cleanDesc}`;
-      } else {
-        description = 'Hoàn về tài khoản';
-      }
-    }
-  } else if (incomeKeywords.some(keyword => input.includes(keyword))) {
-    type = 'Thu';
-    category = 'Thu nhập';
-    emoji = '💵';
-  } else {
-    // Xác định danh mục với ưu tiên cho danh mục cha
-    let bestMatch = '';
-    let matchLength = 0;
-    let isParentCategory = false;
-
-    // Kiểm tra các từ khóa đặc biệt cho xe ô tô
-    const carKeywords = ['xăng', 'rửa xe', 'vetc', 'range rover', 'xe', 'ô tô'];
-    const hasCarKeyword = carKeywords.some(keyword => input.includes(keyword));
-
-    if (hasCarKeyword) {
-      // Ưu tiên danh mục "chi phí xe ô tô"
-      category = 'Chi phí xe ô tô';
-      emoji = categories['chi phí xe ô tô'].emoji;
-
-      // Xác định danh mục con dựa trên từ khóa
-      if (input.includes('xăng')) {
-        subcategory = 'Xăng';
-      } else if (input.includes('rửa xe')) {
-        subcategory = 'Rửa xe';
-      } else if (input.includes('vetc')) {
-        subcategory = 'Vetc';
-      } else if (input.includes('sửa chữa') || input.includes('sửa')) {
-        subcategory = 'Sửa chữa';
-      } else if (input.includes('đỗ xe') || input.includes('vé đỗ')) {
-        subcategory = 'Vé đỗ xe';
-      } else {
-        subcategory = 'Khác';
-      }
-    } else {
-      // Logic phân loại thông thường
-      for (const cat in categories) {
-        if (input.includes(cat) && cat.length > matchLength) {
-          bestMatch = cat;
-          matchLength = cat.length;
-        }
-      }
-
-      if (bestMatch) {
-        category = bestMatch.charAt(0).toUpperCase() + bestMatch.slice(1);
-        emoji = categories[bestMatch].emoji;
-
-        // Xác định danh mục con
-        for (const sub of categories[bestMatch].subcategories) {
-          if (input.includes(sub)) {
-            subcategory = sub.charAt(0).toUpperCase() + sub.slice(1);
-            break;
-          }
-        }
-      }
-    }
-    
-    // Xác định phương thức thanh toán
-    if (paymentMethodFromText) {
-      // Ưu tiên phương thức từ format có dấu -
-      for (const method in paymentMethods) {
-        if (paymentMethodFromText.toLowerCase().includes(method)) {
-          paymentMethod = paymentMethods[method];
-          break;
-        }
-      }
-    } else {
-      // Tìm trong toàn bộ text
-      for (const method in paymentMethods) {
-        if (input.includes(method)) {
-          paymentMethod = paymentMethods[method];
-          break;
-        }
-      }
-    }
-  }
-
-  return {
-    amount,
-    category,
-    emoji,
-    subcategory,
-    paymentMethod,
-    quantity,
-    type,
-    description,
-    customDate
-  };
-}
 
 // Tìm hoặc tạo thư mục theo tháng và năm
 async function findOrCreateMonthYearFolder(year, month) {
@@ -581,32 +384,46 @@ async function sendToChannelOrGroup(expenseData, username, imageUrl = '') {
 }
 
 // Lưu dữ liệu vào Google Sheets
-async function saveToSheet(userId, username, expenseData, imageUrl = '') {
+async function saveToSheet(userId, username, data, imageUrl = '') {
   try {
     await doc.loadInfo();
     const sheet = doc.sheetsByIndex[0];
 
-    const now = new Date();
-    const targetDate = expenseData.customDate || now;
-    const dateStr = targetDate.toLocaleDateString('vi-VN');
-    const isoTime = targetDate.toISOString();
+    // Kiểm tra xem data có phải là dữ liệu kiểm kê kho không
+    if (data.STT && data['Mã'] && data['Tên vật tư']) {
+      // Đây là dữ liệu kiểm kê kho
+      await sheet.addRow({
+        'STT': data.STT,
+        'Mã': data['Mã'],
+        'Tên vật tư': data['Tên vật tư'],
+        'Unit': data.Unit,
+        'Vị trí': data['Vị trí'],
+        'Số đếm': data['Số đếm'],
+        'Note': data.Note,
+        'Người nhập': `${username} (${userId})`,
+        'Thời gian': new Date().toISOString()
+      });
+    } else {
+      // Đây là dữ liệu chi tiêu (logic cũ)
+      const now = new Date();
+      const targetDate = data.customDate || now;
+      const dateStr = targetDate.toLocaleDateString('vi-VN');
+      const isoTime = targetDate.toISOString();
 
-    await sheet.addRow({
-      'Ngày': dateStr,
-      'Danh mục': expenseData.category,
-      'Mô tả': expenseData.description,
-      'Số tiền': expenseData.amount,
-      'Loại': expenseData.type === 'Chi' ? 'expense' : 'income',
-      'Link hóa đơn': imageUrl,
-      'Thời gian': isoTime,
-      'Danh mục phụ': expenseData.subcategory,
-      'Số lượng': expenseData.quantity,
-      'Phương thức thanh toán': expenseData.paymentMethod,
-      'Ghi chú': `${username} (${userId})`
-    });
-
-    // Gửi thông báo lên Channel/Group sau khi lưu thành công
-    // await sendToChannelOrGroup(expenseData, username, imageUrl); // Tạm tắt để tránh trùng lặp
+      await sheet.addRow({
+        'Ngày': dateStr,
+        'Danh mục': data.category,
+        'Mô tả': data.description,
+        'Số tiền': data.amount,
+        'Loại': data.type === 'Chi' ? 'expense' : 'income',
+        'Link hóa đơn': imageUrl,
+        'Thời gian': isoTime,
+        'Danh mục phụ': data.subcategory,
+        'Số lượng': data.quantity,
+        'Phương thức thanh toán': data.paymentMethod,
+        'Ghi chú': `${username} (${userId})`
+      });
+    }
 
     return true;
   } catch (error) {
@@ -2283,7 +2100,50 @@ bot.on('message', async (ctx) => {
       return;
     }
 
-    // Xử lý chi tiêu (logic cũ)
+    // Thử phân tích dữ liệu kiểm kê kho trước
+    const inventoryData = parseInventoryData(text);
+
+    if (inventoryData) {
+      // Đây là dữ liệu kiểm kê kho
+      let confirmMsg = `✅ THÔNG TIN KIỂM KÊ KHO:\n\n`;
+      confirmMsg += `🔢 STT: ${inventoryData.STT}\n`;
+      confirmMsg += `🏷️ Mã: ${inventoryData['Mã']}\n`;
+      confirmMsg += `📦 Tên vật tư: ${inventoryData['Tên vật tư']}\n`;
+      confirmMsg += `📏 Đơn vị: ${inventoryData.Unit}\n`;
+      confirmMsg += `📍 Vị trí: ${inventoryData['Vị trí']}\n`;
+      confirmMsg += `🔢 Số đếm: ${inventoryData['Số đếm']}\n`;
+      if (inventoryData.Note) {
+        confirmMsg += `📝 Ghi chú: ${inventoryData.Note}\n`;
+      }
+      confirmMsg += '\n⏳ Đang lưu...';
+
+      const loadingMsg = await ctx.reply(confirmMsg);
+
+      const saved = await saveToSheet(
+        ctx.from.id,
+        ctx.from.username || ctx.from.first_name,
+        inventoryData
+      );
+
+      if (saved) {
+        await ctx.telegram.editMessageText(
+          ctx.chat.id,
+          loadingMsg.message_id,
+          null,
+          confirmMsg.replace('⏳ Đang lưu...', '✅ ĐÃ LƯU THÀNH CÔNG!')
+        );
+      } else {
+        await ctx.telegram.editMessageText(
+          ctx.chat.id,
+          loadingMsg.message_id,
+          null,
+          '❌ LỖI KHI LƯU DỮ LIỆU!'
+        );
+      }
+      return; // Kết thúc xử lý
+    }
+
+    // Xử lý chi tiêu (logic cũ) - chỉ khi không phải dữ liệu kiểm kê
     if (!isTaskTopic && !isTaskKeyword) {
       const expense = parseExpense(text);
 
