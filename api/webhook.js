@@ -455,7 +455,7 @@ const TASK_SHEET_ID = process.env.TASK_SHEET_ID;
 // Hàm lấy danh sách công việc từ Google Sheets
 async function getTaskList() {
   try {
-    const taskSheetId = TASK_SHEET_ID || process.env.GOOGLE_SHEET_ID;
+    const taskSheetId = TASK_SHEET_ID || '1JwFzEMRZsxAuIzMV0XRSI5X98AXeGa9f2cXVkUzXReE';
     const taskDoc = new GoogleSpreadsheet(taskSheetId, serviceAccountAuth);
 
     await taskDoc.loadInfo();
@@ -1447,7 +1447,7 @@ bot.command('test_simple', async (ctx) => {
   // Test environment variables
   message += '🔧 **Environment Variables:**\n';
   message += `• TASK_SHEET_ID: ${TASK_SHEET_ID ? 'Có' : 'Không'}\n`;
-  message += `• GOOGLE_SHEET_ID: ${process.env.GOOGLE_SHEET_ID ? 'Có' : 'Không'}\n\n`;
+  message += `• GOOGLE_SHEET_ID: ${'1JwFzEMRZsxAuIzMV0XRSI5X98AXeGa9f2cXVkUzXReE' ? 'Có' : 'Không'}\n\n`;
 
   message += '✅ Test hoàn thành!';
 
@@ -1528,7 +1528,7 @@ bot.command('cv', async (ctx) => {
   }
 
   // Hiển thị thông tin lưu trữ
-  const taskSheetId = TASK_SHEET_ID || process.env.GOOGLE_SHEET_ID;
+  const taskSheetId = TASK_SHEET_ID || '1JwFzEMRZsxAuIzMV0XRSI5X98AXeGa9f2cXVkUzXReE';
   const storageInfo = TASK_SHEET_ID ? 'Sheet Ninh (riêng cho công việc)' : 'Sheet chung với chi tiêu';
 
   let confirmMsg = `✅ THÔNG TIN CÔNG VIỆC:\n\n📋 **Đầu việc:** ${task.name}`;
@@ -1579,7 +1579,7 @@ bot.command('addtask', async (ctx) => {
   }
 
   // Hiển thị thông tin lưu trữ
-  const taskSheetId = TASK_SHEET_ID || process.env.GOOGLE_SHEET_ID;
+  const taskSheetId = TASK_SHEET_ID || '1JwFzEMRZsxAuIzMV0XRSI5X98AXeGa9f2cXVkUzXReE';
   const storageInfo = TASK_SHEET_ID ? 'Sheet Ninh (riêng cho công việc)' : 'Sheet chung với chi tiêu';
 
   let confirmMsg = `✅ THÔNG TIN CÔNG VIỆC:\n\n📋 **Đầu việc:** ${task.name}`;
@@ -1996,7 +1996,7 @@ function parseTask(text) {
 async function saveTaskToSheet(userId, username, taskData) {
   try {
     // Sử dụng sheet riêng cho công việc nếu có
-    const taskSheetId = TASK_SHEET_ID || process.env.GOOGLE_SHEET_ID;
+    const taskSheetId = TASK_SHEET_ID || '1JwFzEMRZsxAuIzMV0XRSI5X98AXeGa9f2cXVkUzXReE';
     const taskDoc = new GoogleSpreadsheet(taskSheetId, serviceAccountAuth);
 
     await taskDoc.loadInfo();
