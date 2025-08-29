@@ -32,14 +32,14 @@ const drive = google.drive({
 
 // Hàm phân tích dữ liệu kiểm kê kho
 function parseInventoryData(text) {
-  const parts = text.split('.').map(part => part.trim());
+  const parts = text.split(';').map(part => part.trim());
 
   if (parts.length < 6) { // Yêu cầu tối thiểu 6 trường, Note có thể trống
     return null;
   }
 
   const [stt, ma, tenVatTu, unit, viTri, soDem, ...noteParts] = parts;
-  const note = noteParts.join('. ').trim(); // Ghép lại các phần còn lại của Note
+  const note = noteParts.join('; ').trim(); // Ghép lại các phần còn lại của Note
 
   return {
     'STT': stt,
@@ -2135,7 +2135,50 @@ bot.on('message', async (ctx) => {
     console.log('- isExpenseTopic:', isExpenseTopic);
     console.log('- isTaskKeyword:', isTaskKeyword);
 
-    // Xử lý công việc
+    // Thử phân tích dữ liệu kiểm kê kho TRƯỚC (ưu tiên cao nhất)
+    const inventoryData = parseInventoryData(text);
+
+    if (inventoryData) {
+      // Đây là dữ liệu kiểm kê kho
+      let confirmMsg = `✅ THÔNG TIN KIỂM KÊ KHO:\n\n`;
+      confirmMsg += `🔢 STT: ${inventoryData.STT}\n`;
+      confirmMsg += `🏷️ Mã: ${inventoryData['Mã']}\n`;
+      confirmMsg += `📦 Tên vật tư: ${inventoryData['Tên vật tư']}\n`;
+      confirmMsg += `📏 Đơn vị: ${inventoryData.Unit}\n`;
+      confirmMsg += `📍 Vị trí: ${inventoryData['Vị trí']}\n`;
+      confirmMsg += `🔢 Số đếm: ${inventoryData['Số đếm']}\n`;
+      if (inventoryData.Note) {
+        confirmMsg += `📝 Ghi chú: ${inventoryData.Note}\n`;
+      }
+      confirmMsg += '\n⏳ Đang lưu...';
+
+      const loadingMsg = await ctx.reply(confirmMsg);
+
+      const saved = await saveToSheet(
+        ctx.from.id,
+        ctx.from.username || ctx.from.first_name,
+        inventoryData
+      );
+
+      if (saved) {
+        await ctx.telegram.editMessageText(
+          ctx.chat.id,
+          loadingMsg.message_id,
+          null,
+          confirmMsg.replace('⏳ Đang lưu...', '✅ ĐÃ LƯU THÀNH CÔNG!')
+        );
+      } else {
+        await ctx.telegram.editMessageText(
+          ctx.chat.id,
+          loadingMsg.message_id,
+          null,
+          '❌ LỖI KHI LƯU DỮ LIỆU!'
+        );
+      }
+      return; // Kết thúc xử lý
+    }
+
+    // Xử lý công việc (nếu có keyword hoặc topic)
     if (isTaskTopic || isTaskKeyword) {
       console.log('Processing task. isTaskTopic:', isTaskTopic, 'isTaskKeyword:', isTaskKeyword);
       const task = parseTask(text);
@@ -2179,50 +2222,7 @@ bot.on('message', async (ctx) => {
       return;
     }
 
-    // Thử phân tích dữ liệu kiểm kê kho trước
-    const inventoryData = parseInventoryData(text);
-
-    if (inventoryData) {
-      // Đây là dữ liệu kiểm kê kho
-      let confirmMsg = `✅ THÔNG TIN KIỂM KÊ KHO:\n\n`;
-      confirmMsg += `🔢 STT: ${inventoryData.STT}\n`;
-      confirmMsg += `🏷️ Mã: ${inventoryData['Mã']}\n`;
-      confirmMsg += `📦 Tên vật tư: ${inventoryData['Tên vật tư']}\n`;
-      confirmMsg += `📏 Đơn vị: ${inventoryData.Unit}\n`;
-      confirmMsg += `📍 Vị trí: ${inventoryData['Vị trí']}\n`;
-      confirmMsg += `🔢 Số đếm: ${inventoryData['Số đếm']}\n`;
-      if (inventoryData.Note) {
-        confirmMsg += `📝 Ghi chú: ${inventoryData.Note}\n`;
-      }
-      confirmMsg += '\n⏳ Đang lưu...';
-
-      const loadingMsg = await ctx.reply(confirmMsg);
-
-      const saved = await saveToSheet(
-        ctx.from.id,
-        ctx.from.username || ctx.from.first_name,
-        inventoryData
-      );
-
-      if (saved) {
-        await ctx.telegram.editMessageText(
-          ctx.chat.id,
-          loadingMsg.message_id,
-          null,
-          confirmMsg.replace('⏳ Đang lưu...', '✅ ĐÃ LƯU THÀNH CÔNG!')
-        );
-      } else {
-        await ctx.telegram.editMessageText(
-          ctx.chat.id,
-          loadingMsg.message_id,
-          null,
-          '❌ LỖI KHI LƯU DỮ LIỆU!'
-        );
-      }
-      return; // Kết thúc xử lý
-    }
-
-    // Xử lý chi tiêu (logic cũ) - chỉ khi không phải dữ liệu kiểm kê
+    // Xử lý chi tiêu (logic cũ) - chỉ khi không phải dữ liệu kiểm kê và không phải task
     if (!isTaskTopic && !isTaskKeyword) {
       const expense = parseExpense(text);
 
