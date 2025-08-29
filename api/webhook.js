@@ -2082,7 +2082,7 @@ async function saveTaskToSheet(userId, username, taskData) {
     // Lưu công việc theo format của sheet inventory hiện tại
     const rowData = {
       'STT': nextSTT,
-      'Mã': `TASK-${nextSTT}`, // Mã công việc
+      'Mã': `TASK.${nextSTT}`, // Mã công việc
       'Tên vật tư': taskData.name, // Tên công việc
       'Unit': 'Công việc', // Đơn vị là "Công việc"
       'Vị trí': taskData.status || 'Chưa bắt đầu', // Trạng thái
