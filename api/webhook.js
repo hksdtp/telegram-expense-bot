@@ -2082,7 +2082,7 @@ async function saveTaskToSheet(userId, username, taskData) {
       'Tên vật tư': taskData.name, // Tên công việc
       'Vị trí': taskData.status || 'Chưa bắt đầu', // Trạng thái
       'Số đếm': taskData.progress || 0, // Tiến độ %
-      'Note': `${taskData.description || ''} | Deadline: ${taskData.deadline || 'Không có'} | Tạo bởi: ${username} (${userId})`
+      'Note': taskData.description || ''
     };
 
     console.log('💾 Attempting to save row data:', rowData);
