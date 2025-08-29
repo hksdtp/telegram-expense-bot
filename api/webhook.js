@@ -34,18 +34,17 @@ const drive = google.drive({
 function parseInventoryData(text) {
   const parts = text.split(';').map(part => part.trim());
 
-  if (parts.length < 6) { // Yêu cầu tối thiểu 6 trường, Note có thể trống
+  if (parts.length < 5) { // Yêu cầu tối thiểu 5 trường, Note có thể trống
     return null;
   }
 
-  const [stt, ma, tenVatTu, unit, viTri, soDem, ...noteParts] = parts;
+  const [stt, ma, tenVatTu, viTri, soDem, ...noteParts] = parts;
   const note = noteParts.join('; ').trim(); // Ghép lại các phần còn lại của Note
 
   return {
     'STT': stt,
     'Mã': ma,
     'Tên vật tư': tenVatTu,
-    'Unit': unit,
     'Vị trí': viTri,
     'Số đếm': soDem,
     'Note': note || '' // Nếu không có Note thì để trống
@@ -396,12 +395,9 @@ async function saveToSheet(userId, username, data, imageUrl = '') {
         'STT': data.STT,
         'Mã': data['Mã'],
         'Tên vật tư': data['Tên vật tư'],
-        'Unit': data.Unit,
         'Vị trí': data['Vị trí'],
         'Số đếm': data['Số đếm'],
-        'Note': data.Note,
-        'Người nhập': `${username} (${userId})`,
-        'Thời gian': new Date().toISOString()
+        'Note': data.Note
       });
     } else {
       // Đây là dữ liệu chi tiêu (logic cũ)
@@ -2079,12 +2075,11 @@ async function saveTaskToSheet(userId, username, taskData) {
     const nextSTT = rows.length + 1;
     console.log('🔢 Next STT:', nextSTT);
 
-    // Lưu công việc theo format của sheet inventory hiện tại
+    // Lưu công việc theo format của sheet inventory hiện tại (không có cột Unit)
     const rowData = {
       'STT': nextSTT,
       'Mã': `TASK.${nextSTT}`, // Mã công việc
       'Tên vật tư': taskData.name, // Tên công việc
-      'Unit': 'Công việc', // Đơn vị là "Công việc"
       'Vị trí': taskData.status || 'Chưa bắt đầu', // Trạng thái
       'Số đếm': taskData.progress || 0, // Tiến độ %
       'Note': `${taskData.description || ''} | Deadline: ${taskData.deadline || 'Không có'} | Tạo bởi: ${username} (${userId})`
@@ -2144,7 +2139,6 @@ bot.on('message', async (ctx) => {
       confirmMsg += `🔢 STT: ${inventoryData.STT}\n`;
       confirmMsg += `🏷️ Mã: ${inventoryData['Mã']}\n`;
       confirmMsg += `📦 Tên vật tư: ${inventoryData['Tên vật tư']}\n`;
-      confirmMsg += `📏 Đơn vị: ${inventoryData.Unit}\n`;
       confirmMsg += `📍 Vị trí: ${inventoryData['Vị trí']}\n`;
       confirmMsg += `🔢 Số đếm: ${inventoryData['Số đếm']}\n`;
       if (inventoryData.Note) {
