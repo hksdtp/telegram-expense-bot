@@ -2079,16 +2079,15 @@ async function saveTaskToSheet(userId, username, taskData) {
     const nextSTT = rows.length + 1;
     console.log('🔢 Next STT:', nextSTT);
 
-    // Thử lưu với error handling chi tiết
+    // Lưu công việc theo format của sheet inventory hiện tại
     const rowData = {
       'STT': nextSTT,
-      'Đầu Việc': taskData.name,
-      'Mô Tả Chi Tiết': taskData.description || '',
-      'Thời Gian Bắt Đầu': taskData.startTime || taskData.createdDate,
-      'Thời Gian Kết Thúc (Deadline)': taskData.deadline || '',
-      'Tiến Độ (%)': taskData.progress || 0,
-      'Trạng Thái': taskData.status || 'Chưa bắt đầu',
-      'Ghi Chú / Vướng Mắc:': taskData.notes || `Tạo bởi ${username} (${userId})`
+      'Mã': `TASK-${nextSTT}`, // Mã công việc
+      'Tên vật tư': taskData.name, // Tên công việc
+      'Unit': 'Công việc', // Đơn vị là "Công việc"
+      'Vị trí': taskData.status || 'Chưa bắt đầu', // Trạng thái
+      'Số đếm': taskData.progress || 0, // Tiến độ %
+      'Note': `${taskData.description || ''} | Deadline: ${taskData.deadline || 'Không có'} | Tạo bởi: ${username} (${userId})`
     };
 
     console.log('💾 Attempting to save row data:', rowData);
