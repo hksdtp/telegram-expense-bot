@@ -1474,6 +1474,68 @@ bot.command('test_simple', async (ctx) => {
   ctx.reply(message, { parse_mode: 'Markdown' });
 });
 
+// Lệnh debug chi tiết quyền ghi
+bot.command('debug_write', async (ctx) => {
+  try {
+    const msg = await ctx.reply('🔍 Đang debug quyền ghi...');
+
+    // Bước 1: Kiểm tra kết nối
+    await doc.loadInfo();
+    let debugMsg = `✅ **BƯỚC 1: KẾT NỐI THÀNH CÔNG**\n`;
+    debugMsg += `📋 Sheet: ${doc.title}\n`;
+    debugMsg += `🆔 ID: ${doc.spreadsheetId}\n\n`;
+
+    // Bước 2: Kiểm tra sheet con
+    const sheet = doc.sheetsByTitle['Ninh'] || doc.sheetsByIndex[0];
+    debugMsg += `✅ **BƯỚC 2: CHỌN SHEET**\n`;
+    debugMsg += `📊 Sheet: ${sheet.title}\n`;
+    debugMsg += `📏 Rows: ${sheet.rowCount}\n`;
+    debugMsg += `📐 Cols: ${sheet.columnCount}\n\n`;
+
+    // Bước 3: Đếm dữ liệu hiện có
+    const rows = await sheet.getRows();
+    debugMsg += `✅ **BƯỚC 3: ĐỌC DỮ LIỆU**\n`;
+    debugMsg += `🔢 Số dòng có dữ liệu: ${rows.length}\n`;
+    debugMsg += `🔢 STT tiếp theo: ${rows.length + 1}\n\n`;
+
+    // Bước 4: Test ghi dữ liệu
+    debugMsg += `⏳ **BƯỚC 4: TEST GHI DỮ LIỆU...**`;
+
+    await ctx.telegram.editMessageText(
+      ctx.chat.id,
+      msg.message_id,
+      null,
+      debugMsg,
+      { parse_mode: 'Markdown' }
+    );
+
+    // Thử ghi dữ liệu test
+    const testRow = {
+      'STT': rows.length + 1,
+      'Mã': 'DEBUG_TEST',
+      'Tên vật tư': 'Test Write Permission',
+      'Vị trí': 'DEBUG',
+      'Số đếm': '999',
+      'Note': `Test at ${new Date().toISOString()}`
+    };
+
+    await sheet.addRow(testRow);
+
+    debugMsg = debugMsg.replace('⏳ **BƯỚC 4: TEST GHI DỮ LIỆU...**', '✅ **BƯỚC 4: GHI DỮ LIỆU THÀNH CÔNG!**\n\n🎉 **KẾT QUẢ: Bot có thể ghi dữ liệu!**\n\nKiểm tra dòng cuối trong sheet "Ninh" để thấy dữ liệu test.');
+
+    await ctx.telegram.editMessageText(
+      ctx.chat.id,
+      msg.message_id,
+      null,
+      debugMsg,
+      { parse_mode: 'Markdown' }
+    );
+
+  } catch (error) {
+    await ctx.reply(`❌ **LỖI DEBUG**\n\nError: ${error.message}\n\nStack: ${error.stack}`);
+  }
+});
+
 // Lệnh test lưu inventory
 bot.command('test_inventory', async (ctx) => {
   try {
