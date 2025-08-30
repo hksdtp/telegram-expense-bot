@@ -2243,39 +2243,50 @@ bot.on('message', async (ctx) => {
     const inventoryData = parseInventoryData(text);
 
     if (inventoryData) {
-      // Đây là dữ liệu kiểm kê kho
-      let confirmMsg = `✅ THÔNG TIN KIỂM KÊ KHO:\n\n`;
-      confirmMsg += `🏷️ Mã: ${inventoryData['Mã']}\n`;
-      confirmMsg += `📦 Tên vật tư: ${inventoryData['Tên vật tư']}\n`;
-      confirmMsg += `📍 Vị trí: ${inventoryData['Vị trí']}\n`;
-      confirmMsg += `🔢 Số đếm: ${inventoryData['Số đếm']}\n`;
-      if (inventoryData.Note) {
-        confirmMsg += `📝 Ghi chú: ${inventoryData.Note}\n`;
-      }
-      confirmMsg += '\n⏳ Đang lưu...';
+      // Đây là dữ liệu kiểm kê kho - tính STT trước khi hiển thị
+      try {
+        await doc.loadInfo();
+        const sheet = doc.sheetsByIndex[0];
+        const rows = await sheet.getRows();
+        const nextSTT = rows.length + 1;
 
-      const loadingMsg = await ctx.reply(confirmMsg);
+        let confirmMsg = `✅ THÔNG TIN KIỂM KÊ KHO:\n\n`;
+        confirmMsg += `🔢 STT: ${nextSTT}\n`;
+        confirmMsg += `🏷️ Mã: ${inventoryData['Mã']}\n`;
+        confirmMsg += `📦 Tên vật tư: ${inventoryData['Tên vật tư']}\n`;
+        confirmMsg += `📍 Vị trí: ${inventoryData['Vị trí']}\n`;
+        confirmMsg += `🔢 Số đếm: ${inventoryData['Số đếm']}\n`;
+        if (inventoryData.Note) {
+          confirmMsg += `📝 Ghi chú: ${inventoryData.Note}\n`;
+        }
+        confirmMsg += '\n⏳ Đang lưu...';
 
-      const saved = await saveToSheet(
-        ctx.from.id,
-        ctx.from.username || ctx.from.first_name,
-        inventoryData
-      );
+        const loadingMsg = await ctx.reply(confirmMsg);
 
-      if (saved) {
-        await ctx.telegram.editMessageText(
-          ctx.chat.id,
-          loadingMsg.message_id,
-          null,
-          confirmMsg.replace('⏳ Đang lưu...', '✅ ĐÃ LƯU THÀNH CÔNG!')
+        const saved = await saveToSheet(
+          ctx.from.id,
+          ctx.from.username || ctx.from.first_name,
+          inventoryData
         );
-      } else {
-        await ctx.telegram.editMessageText(
-          ctx.chat.id,
-          loadingMsg.message_id,
-          null,
-          '❌ LỖI KHI LƯU DỮ LIỆU!'
-        );
+
+        if (saved) {
+          await ctx.telegram.editMessageText(
+            ctx.chat.id,
+            loadingMsg.message_id,
+            null,
+            confirmMsg.replace('⏳ Đang lưu...', '✅ ĐÃ LƯU THÀNH CÔNG!')
+          );
+        } else {
+          await ctx.telegram.editMessageText(
+            ctx.chat.id,
+            loadingMsg.message_id,
+            null,
+            '❌ LỖI KHI LƯU DỮ LIỆU!'
+          );
+        }
+      } catch (error) {
+        console.error('❌ Lỗi khi tính STT:', error);
+        await ctx.reply('❌ LỖI KHI XỬ LÝ DỮ LIỆU!');
       }
       return; // Kết thúc xử lý
     }
