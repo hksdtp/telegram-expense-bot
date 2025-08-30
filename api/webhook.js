@@ -398,7 +398,8 @@ async function saveToSheet(userId, username, data, imageUrl = '') {
     await doc.loadInfo();
     console.log('📋 Doc loaded, title:', doc.title);
 
-    const sheet = doc.sheetsByIndex[0];
+    // Tìm sheet "Ninh" hoặc sheet đầu tiên (giống logic saveTaskToSheet)
+    const sheet = doc.sheetsByTitle['Ninh'] || doc.sheetsByIndex[0];
     console.log('📊 Using sheet:', sheet.title);
 
     // Kiểm tra xem data có phải là dữ liệu kiểm kê kho không
@@ -2246,7 +2247,8 @@ bot.on('message', async (ctx) => {
       // Đây là dữ liệu kiểm kê kho - tính STT trước khi hiển thị
       try {
         await doc.loadInfo();
-        const sheet = doc.sheetsByIndex[0];
+        // Tìm sheet "Ninh" hoặc sheet đầu tiên (giống logic saveToSheet)
+        const sheet = doc.sheetsByTitle['Ninh'] || doc.sheetsByIndex[0];
         const rows = await sheet.getRows();
         const nextSTT = rows.length + 1;
 
