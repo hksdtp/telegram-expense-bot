@@ -22,8 +22,8 @@ const serviceAccountAuth = new JWT({
 });
 
 // Khởi tạo Google APIs với auth
-// Force use new Google Sheet ID - Updated 2024-08-30
-const doc = new GoogleSpreadsheet('1JwFzEMRZsxAuIzMV0XRSI5X98AXeGa9f2cXVkUzXReE', serviceAccountAuth);
+// Use correct Google Sheet ID for "Ninh" tab - Updated 2024-08-30
+const doc = new GoogleSpreadsheet('1puKECNQhgaRs9-d7nqHH6U9qTvGiWlchEes9CCpHCbI', serviceAccountAuth);
 
 // Khởi tạo Drive API với service account auth
 const drive = google.drive({
