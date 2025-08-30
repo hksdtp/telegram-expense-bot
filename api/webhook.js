@@ -397,8 +397,12 @@ async function saveToSheet(userId, username, data, imageUrl = '') {
 
     // Kiểm tra xem data có phải là dữ liệu kiểm kê kho không
     if (data['Mã'] && data['Tên vật tư'] && !data.name) { // Không có data.name để phân biệt với task
-      // Đây là dữ liệu kiểm kê kho - STT sẽ tự động tăng
+      // Đây là dữ liệu kiểm kê kho - tính STT tiếp theo
+      const rows = await sheet.getRows();
+      const nextSTT = rows.length + 1;
+
       await sheet.addRow({
+        'STT': nextSTT,
         'Mã': data['Mã'],
         'Tên vật tư': data['Tên vật tư'],
         'Vị trí': data['Vị trí'],
@@ -2124,8 +2128,9 @@ async function saveTaskToSheet(userId, username, taskData) {
     const nextSTT = rows.length + 1;
     console.log('🔢 Next STT:', nextSTT);
 
-    // Lưu công việc theo format của sheet inventory hiện tại (không có STT, sẽ tự động tăng)
+    // Lưu công việc theo format của sheet inventory hiện tại (có STT)
     const rowData = {
+      'STT': nextSTT,
       'Mã': `TASK.${nextSTT}`, // Mã công việc
       'Tên vật tư': taskData.name, // Tên công việc
       'Vị trí': taskData.status || 'Chưa bắt đầu', // Trạng thái
