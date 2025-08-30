@@ -392,23 +392,35 @@ async function sendToChannelOrGroup(expenseData, username, imageUrl = '') {
 // Lưu dữ liệu vào Google Sheets
 async function saveToSheet(userId, username, data, imageUrl = '') {
   try {
+    console.log('💾 saveToSheet called with data:', data);
+
     await doc.loadInfo();
+    console.log('📋 Doc loaded, title:', doc.title);
+
     const sheet = doc.sheetsByIndex[0];
+    console.log('📊 Using sheet:', sheet.title);
 
     // Kiểm tra xem data có phải là dữ liệu kiểm kê kho không
     if (data['Mã'] && data['Tên vật tư'] && !data.name) { // Không có data.name để phân biệt với task
+      console.log('✅ Detected as inventory data');
+
       // Đây là dữ liệu kiểm kê kho - tính STT tiếp theo
       const rows = await sheet.getRows();
       const nextSTT = rows.length + 1;
+      console.log('🔢 Next STT:', nextSTT);
 
-      await sheet.addRow({
+      const rowData = {
         'STT': nextSTT,
         'Mã': data['Mã'],
         'Tên vật tư': data['Tên vật tư'],
         'Vị trí': data['Vị trí'],
         'Số đếm': data['Số đếm'],
         'Note': data.Note
-      });
+      };
+
+      console.log('💾 Attempting to save inventory row:', rowData);
+      await sheet.addRow(rowData);
+      console.log('✅ Inventory data saved successfully');
     } else {
       // Đây là dữ liệu chi tiêu (logic cũ)
       const now = new Date();
@@ -1458,6 +1470,49 @@ bot.command('test_simple', async (ctx) => {
   message += '✅ Test hoàn thành!';
 
   ctx.reply(message, { parse_mode: 'Markdown' });
+});
+
+// Lệnh test lưu inventory
+bot.command('test_inventory', async (ctx) => {
+  try {
+    const msg = await ctx.reply('🧪 Đang test lưu inventory...');
+
+    const testInventoryData = {
+      'Mã': 'TEST001',
+      'Tên vật tư': 'Test Item',
+      'Vị trí': 'A1',
+      'Số đếm': '10,5',
+      'Note': 'Test note'
+    };
+
+    console.log('🧪 Testing inventory save with data:', testInventoryData);
+
+    const saved = await saveToSheet(
+      ctx.from.id,
+      ctx.from.username || ctx.from.first_name,
+      testInventoryData
+    );
+
+    if (saved) {
+      await ctx.telegram.editMessageText(
+        ctx.chat.id,
+        msg.message_id,
+        null,
+        '✅ **TEST INVENTORY LƯU THÀNH CÔNG!**\n\nKiểm tra Google Sheet để xem dữ liệu.',
+        { parse_mode: 'Markdown' }
+      );
+    } else {
+      await ctx.telegram.editMessageText(
+        ctx.chat.id,
+        msg.message_id,
+        null,
+        '❌ **TEST INVENTORY LƯU THẤT BẠI!**\n\nKiểm tra console log để xem lỗi chi tiết.'
+      );
+    }
+
+  } catch (error) {
+    await ctx.reply(`❌ **LỖI TEST INVENTORY**\n\nError: ${error.message}`);
+  }
 });
 
 // Lệnh test lưu task
