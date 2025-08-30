@@ -32,22 +32,30 @@ const drive = google.drive({
 
 // Hàm phân tích dữ liệu kiểm kê kho
 function parseInventoryData(text) {
+  console.log('🔍 parseInventoryData called with text:', text);
+
   const parts = text.split(';').map(part => part.trim());
+  console.log('🔍 Split parts:', parts);
+  console.log('🔍 Parts length:', parts.length);
 
   if (parts.length < 4) { // Yêu cầu tối thiểu 4 trường (mã, tên, vị trí, số đếm), Note có thể trống
+    console.log('🔍 Not enough parts, returning null');
     return null;
   }
 
   const [ma, tenVatTu, viTri, soDem, ...noteParts] = parts;
   const note = noteParts.join('; ').trim(); // Ghép lại các phần còn lại của Note
 
-  return {
+  const result = {
     'Mã': ma,
     'Tên vật tư': tenVatTu,
     'Vị trí': viTri,
     'Số đếm': soDem,
     'Note': note || '' // Nếu không có Note thì để trống
   };
+
+  console.log('🔍 parseInventoryData result:', result);
+  return result;
 }
 
 const paymentMethods = {
