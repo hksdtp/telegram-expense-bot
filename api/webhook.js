@@ -34,15 +34,14 @@ const drive = google.drive({
 function parseInventoryData(text) {
   const parts = text.split(';').map(part => part.trim());
 
-  if (parts.length < 5) { // Yêu cầu tối thiểu 5 trường, Note có thể trống
+  if (parts.length < 4) { // Yêu cầu tối thiểu 4 trường (mã, tên, vị trí, số đếm), Note có thể trống
     return null;
   }
 
-  const [stt, ma, tenVatTu, viTri, soDem, ...noteParts] = parts;
+  const [ma, tenVatTu, viTri, soDem, ...noteParts] = parts;
   const note = noteParts.join('; ').trim(); // Ghép lại các phần còn lại của Note
 
   return {
-    'STT': stt,
     'Mã': ma,
     'Tên vật tư': tenVatTu,
     'Vị trí': viTri,
@@ -389,10 +388,9 @@ async function saveToSheet(userId, username, data, imageUrl = '') {
     const sheet = doc.sheetsByIndex[0];
 
     // Kiểm tra xem data có phải là dữ liệu kiểm kê kho không
-    if (data.STT && data['Mã'] && data['Tên vật tư']) {
-      // Đây là dữ liệu kiểm kê kho
+    if (data['Mã'] && data['Tên vật tư'] && !data.name) { // Không có data.name để phân biệt với task
+      // Đây là dữ liệu kiểm kê kho - STT sẽ tự động tăng
       await sheet.addRow({
-        'STT': data.STT,
         'Mã': data['Mã'],
         'Tên vật tư': data['Tên vật tư'],
         'Vị trí': data['Vị trí'],
@@ -2075,9 +2073,8 @@ async function saveTaskToSheet(userId, username, taskData) {
     const nextSTT = rows.length + 1;
     console.log('🔢 Next STT:', nextSTT);
 
-    // Lưu công việc theo format của sheet inventory hiện tại (không có cột Unit)
+    // Lưu công việc theo format của sheet inventory hiện tại (không có STT, sẽ tự động tăng)
     const rowData = {
-      'STT': nextSTT,
       'Mã': `TASK.${nextSTT}`, // Mã công việc
       'Tên vật tư': taskData.name, // Tên công việc
       'Vị trí': taskData.status || 'Chưa bắt đầu', // Trạng thái
@@ -2136,7 +2133,6 @@ bot.on('message', async (ctx) => {
     if (inventoryData) {
       // Đây là dữ liệu kiểm kê kho
       let confirmMsg = `✅ THÔNG TIN KIỂM KÊ KHO:\n\n`;
-      confirmMsg += `🔢 STT: ${inventoryData.STT}\n`;
       confirmMsg += `🏷️ Mã: ${inventoryData['Mã']}\n`;
       confirmMsg += `📦 Tên vật tư: ${inventoryData['Tên vật tư']}\n`;
       confirmMsg += `📍 Vị trí: ${inventoryData['Vị trí']}\n`;
