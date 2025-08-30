@@ -1448,6 +1448,49 @@ bot.command('test_simple', async (ctx) => {
   ctx.reply(message, { parse_mode: 'Markdown' });
 });
 
+// Lệnh test lưu task
+bot.command('test_task', async (ctx) => {
+  try {
+    const msg = await ctx.reply('🧪 Đang test lưu task...');
+
+    const testTaskData = {
+      name: 'Test Task',
+      description: 'Mô tả test',
+      status: 'Test Status',
+      progress: 50,
+      deadline: '31/12'
+    };
+
+    console.log('🧪 Testing task save with data:', testTaskData);
+
+    const saved = await saveTaskToSheet(
+      ctx.from.id,
+      ctx.from.username || ctx.from.first_name,
+      testTaskData
+    );
+
+    if (saved) {
+      await ctx.telegram.editMessageText(
+        ctx.chat.id,
+        msg.message_id,
+        null,
+        '✅ **TEST TASK LƯU THÀNH CÔNG!**\n\nKiểm tra Google Sheet để xem dữ liệu.',
+        { parse_mode: 'Markdown' }
+      );
+    } else {
+      await ctx.telegram.editMessageText(
+        ctx.chat.id,
+        msg.message_id,
+        null,
+        '❌ **TEST TASK LƯU THẤT BẠI!**\n\nKiểm tra console log để xem lỗi chi tiết.'
+      );
+    }
+
+  } catch (error) {
+    await ctx.reply(`❌ **LỖI TEST TASK**\n\nError: ${error.message}`);
+  }
+});
+
 // Lệnh debug sheet structure
 bot.command('debug_sheet', async (ctx) => {
   try {
